@@ -1,3 +1,5 @@
+### Dev notes for my groupmates
+
 *Note: Aesthetic of buttons, fields, etc. are temporary. Design will be finalized before demo but the current theme colors of the app will be followed.*
 
 **MainActivity.kt**
