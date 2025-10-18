@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
@@ -69,7 +70,7 @@ fun TournamentDashboardScreen(
             when (selectedTabIndex) {
                 0 -> OverviewTab(tournament)
                 1 -> MatchesTab()
-                2 -> PlaceholderTabContent(screenName = "Bracket")
+                2 -> BracketTab()
                 3 -> PlaceholderTabContent(screenName = "Metrics")
             }
         }

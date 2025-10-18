@@ -30,11 +30,13 @@ fun AppNavHost(){
         composable("home") {
             HomeScreen(
                 //onProfileClick
-            //onCreateTournamentClick
+            onTournamentClick = {
+                navController.navigate("tournament")
+            },
            onJoinTournamentClick = {
                navController.navigate("joinTournament")
            }
-            //onTournamentClick
+            //onCreateTournamentClick
             )
         }
 
@@ -45,6 +47,13 @@ fun AppNavHost(){
                // onJoinAsPlayerClick: () -> Unit = {},
                // onJoinAsJudgeClick: () -> Unit = {}
             )
+        }
+
+        composable ("tournament") {
+            TournamentDashboardScreen (
+                onBackClick = { navController.popBackStack() }
+            )
+
         }
     }
 

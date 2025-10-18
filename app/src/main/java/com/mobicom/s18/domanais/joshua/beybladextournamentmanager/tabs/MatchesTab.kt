@@ -27,7 +27,9 @@ val dummyMatches = listOf(
     Match("m2", "SpeedKing", "Leo a.k.a. Lion", "Round 1", true, "3-0"),
     Match("m3", "DraconicFury", "ShadowBlade", "Round 1", false),
     Match("m4", "VortexMaster", "IronGrip", "Round 1", false),
-    Match("m5", "Blader_ACE", "SpeedKing", "Round 2", false)
+    Match("m5", "Blader_ACE", "SpeedKing", "Round 2", false),
+    Match("m6", "DraconicFury", "Blader_ACE", "Round 3", true, "3-0"),
+    Match("m7", "DraconicFury", "VortexMaster", "Round 2", true),
 )
 
 @Composable
