@@ -13,16 +13,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        setContent {
-            BeybladeXTournamentManagerTheme {
-                var showSplashScreen by remember { mutableStateOf(true) }
-                if (showSplashScreen) {
-                    SplashScreen(onTimeout = { showSplashScreen = false })
-                } else {
-                    HomeScreen()
+//        setContent {
+//            BeybladeXTournamentManagerTheme {
+//                var showSplashScreen by remember { mutableStateOf(true) }
+//                if (showSplashScreen) {
+//                    SplashScreen(onTimeout = { showSplashScreen = false })
+//                } else {
+//                    HomeScreen()
+//                }
+//            }
+//        }
+            setContent {
+                BeybladeXTournamentManagerTheme {
+                    MetricsTrackingScreen()
                 }
             }
-        }
     }
 }
 
