@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
                 if (showSplashScreen) {
                     SplashScreen(onTimeout = { showSplashScreen = false })
                 } else {
-                    HomeScreen()
+                    AppNavHost()
                 }
             }
         }
