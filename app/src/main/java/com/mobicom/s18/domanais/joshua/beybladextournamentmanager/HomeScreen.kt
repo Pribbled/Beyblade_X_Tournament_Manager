@@ -34,10 +34,10 @@ val dummyTournaments = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onProfileClick: () -> Unit = {},
-    onCreateTournamentClick: () -> Unit = {},
-    onJoinTournamentClick: () -> Unit = {},
-    onTournamentClick: (String) -> Unit = {}
+        onProfileClick: () -> Unit = {},
+        onCreateTournamentClick: () -> Unit = {},
+        onJoinTournamentClick: () -> Unit = {},
+        onTournamentClick: (String) -> Unit = {}
 ) {
     Scaffold(
         topBar = {

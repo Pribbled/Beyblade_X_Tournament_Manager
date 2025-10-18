@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
@@ -20,7 +22,8 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 @Composable
 fun TournamentDashboardScreen(
     tournament: Tournament = dummyTournaments.first(), // Use a dummy tournament for preview
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {} ,
+    onViewMatchClick: (Match) -> Unit = {}
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
@@ -68,8 +71,8 @@ fun TournamentDashboardScreen(
             // Content for each tab
             when (selectedTabIndex) {
                 0 -> OverviewTab(tournament)
-                1 -> MatchesTab()
-                2 -> PlaceholderTabContent(screenName = "Bracket")
+                1 -> MatchesTab( onViewMatchClick = onViewMatchClick)
+                2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                 3 -> PlaceholderTabContent(screenName = "Metrics")
             }
         }

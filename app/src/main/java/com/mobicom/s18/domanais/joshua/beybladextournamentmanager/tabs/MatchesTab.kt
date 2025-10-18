@@ -27,11 +27,13 @@ val dummyMatches = listOf(
     Match("m2", "SpeedKing", "Leo a.k.a. Lion", "Round 1", true, "3-0"),
     Match("m3", "DraconicFury", "ShadowBlade", "Round 1", false),
     Match("m4", "VortexMaster", "IronGrip", "Round 1", false),
-    Match("m5", "Blader_ACE", "SpeedKing", "Round 2", false)
+    Match("m5", "Blader_ACE", "SpeedKing", "Round 2", false),
+    Match("m6", "DraconicFury", "Blader_ACE", "Round 3", true, "3-0"),
+    Match("m7", "DraconicFury", "VortexMaster", "Round 2", true),
 )
 
 @Composable
-fun MatchesTab() {
+fun MatchesTab(onViewMatchClick: (Match) -> Unit) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -40,7 +42,7 @@ fun MatchesTab() {
             Text("Upcoming Matches", style = MaterialTheme.typography.titleLarge)
         }
         items(dummyMatches.filter { !it.isCompleted }) { match ->
-            MatchCard(match = match)
+            MatchCard(match = match, onViewMatchClick = onViewMatchClick)
         }
 
         item {
@@ -51,13 +53,16 @@ fun MatchesTab() {
             )
         }
         items(dummyMatches.filter { it.isCompleted }) { match ->
-            MatchCard(match = match)
+            MatchCard(match = match, onViewMatchClick = onViewMatchClick)
         }
     }
 }
 
 @Composable
-fun MatchCard(match: Match) {
+fun MatchCard(
+    match: Match,
+    onViewMatchClick: (Match) -> Unit = {}
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -75,8 +80,8 @@ fun MatchCard(match: Match) {
             if (match.isCompleted) {
                 Text(match.score ?: "N/A", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             } else {
-                Button(onClick = { /* TODO: to match details*/ }) {
-                    Text("View")
+                Button( onClick = { onViewMatchClick(match) }) {
+                    Text("View Match")
                 }
             }
         }
@@ -87,6 +92,8 @@ fun MatchCard(match: Match) {
 @Composable
 fun MatchesTabPreview() {
     BeybladeXTournamentManagerTheme {
-        MatchesTab()
+        MatchesTab(
+            onViewMatchClick = TODO()
+        )
     }
 }
