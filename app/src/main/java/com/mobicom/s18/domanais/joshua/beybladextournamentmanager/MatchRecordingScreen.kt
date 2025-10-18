@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -226,18 +227,23 @@ fun ManualScoreEditDialog(
 @Composable
 fun LockScreenOrientation(orientation: Int) {
     val context = LocalContext.current
-    DisposableEffect(Unit) {
-        val activity = context as Activity
-        val originalOrientation = activity.requestedOrientation
-        activity.requestedOrientation = orientation
-        onDispose {
-            activity.requestedOrientation = originalOrientation
+
+    // This check prevents the screen orientation code from running in Preview mode
+    if (!LocalInspectionMode.current) {
+        DisposableEffect(Unit) {
+            val activity = context as? Activity ?: return@DisposableEffect onDispose {}
+            val originalOrientation = activity.requestedOrientation
+            activity.requestedOrientation = orientation
+            onDispose {
+                // Reset the orientation when the composable is disposed
+                activity.requestedOrientation = originalOrientation
+            }
         }
     }
 }
 
 
-@Preview()
+@Preview(device = "spec:shape=Normal,width=1280,height=800,unit=dp,dpi=240")
 @Composable
 fun MatchRecordingScreenPreview() {
     BeybladeXTournamentManagerTheme {

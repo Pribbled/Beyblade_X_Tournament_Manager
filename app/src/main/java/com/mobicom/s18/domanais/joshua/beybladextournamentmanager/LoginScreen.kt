@@ -16,7 +16,7 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 
 @Composable
 fun LoginScreen(
-    onLoginClick: (email: String, password: String) -> Unit = { _, _ -> },
+    onLoginClick: () -> Unit = {}, //(email: String, password: String) -> Unit = { _, _ -> }
     onGoogleLoginClick: () -> Unit = {},
     onFacebookLoginClick: () -> Unit = {},
     onTwitterLoginClick: () -> Unit = {},
@@ -66,7 +66,7 @@ fun LoginScreen(
         }
 
         Button(
-            onClick = { onLoginClick(email, password) },
+            onClick = { onLoginClick() },
             modifier = Modifier
                 .fillMaxWidth()
         ) {

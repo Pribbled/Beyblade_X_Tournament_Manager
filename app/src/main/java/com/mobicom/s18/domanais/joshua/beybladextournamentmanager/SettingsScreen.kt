@@ -17,7 +17,8 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit = {},
-    onLogoutClick: () -> Unit = {}
+    onLogoutClick: () -> Unit = {},
+    onAboutClick: () -> Unit = {}
 ) {
     var notificationsEnabled by remember { mutableStateOf(true) }
     var darkThemeEnabled by remember { mutableStateOf(false) }
@@ -82,6 +83,15 @@ fun SettingsScreen(
                         checked = privacyEnabled,
                         onCheckedChange = { privacyEnabled = it }
                     )
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(), onClick = {onAboutClick()}
+            ) {
+                Box(
+                    Modifier.fillMaxSize().padding(16.dp)
+                ) {
+                    Text("About App")
                 }
             }
 

@@ -133,7 +133,8 @@ fun RoundDetail(
 @Composable
 fun MatchDetailsComponent(
     onUpdateScore: () -> Unit = {},
-    onRecord: () -> Unit = {}
+    onRecord: () -> Unit = {},
+    onBuildSubmit: () -> Unit = {}
 ) {
     var elapsed by remember { mutableLongStateOf(0L) } // seconds
     var running by remember { mutableStateOf(false) }
@@ -228,6 +229,22 @@ fun MatchDetailsComponent(
                 Text("Update Score")
             }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            OutlinedButton(
+                onClick = { onBuildSubmit() },
+                modifier = Modifier
+                    .width(190.dp)
+                    .height(44.dp)
+            ) {
+                Text("Submit Final Build")
+            }
+        }
     }
 }
 
@@ -235,7 +252,8 @@ fun MatchDetailsComponent(
 @Composable
 fun MatchDetailsScreen(
     onBackClick: () -> Unit = {},
-    onRecord: () -> Unit
+    onRecord: () -> Unit,
+    onBuildSubmit: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -334,7 +352,8 @@ fun MatchDetailsScreen(
             item {
                 MatchDetailsComponent(
                     onUpdateScore = {},
-                    onRecord = onRecord
+                    onRecord = onRecord,
+                    onBuildSubmit = onBuildSubmit
                 )
             }
 
@@ -353,5 +372,5 @@ fun MatchDetailsScreen(
 @Preview
 @Composable
 fun MatchDetailsScreenPreview() {
-    MatchDetailsScreen(onRecord = {})
+    MatchDetailsScreen(onRecord = {}, onBuildSubmit = {})
 }

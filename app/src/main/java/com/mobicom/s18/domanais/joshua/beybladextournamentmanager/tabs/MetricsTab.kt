@@ -1,10 +1,9 @@
-package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
+package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,37 +26,16 @@ import com.patrykandpatrick.vico.compose.chart.column.columnChart
 import com.patrykandpatrick.vico.core.component.shape.LineComponent
 import com.patrykandpatrick.vico.core.entry.entryModelOf
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
-import kotlin.div
+import com.patrykandpatrick.vico.core.component.shape.Shapes
 import kotlin.math.min
-import kotlin.text.toDouble
-import kotlin.text.toFloat
-import kotlin.text.toInt
-import kotlin.times
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MetricsTrackingScreen(
+fun MetricsTab(
     onBackClick: () -> Unit = {}
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Tournament Metrics") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
+
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -177,7 +155,7 @@ private fun BarChartCard() {
                         LineComponent(
                             color = primaryColor.toArgb(),
                             thicknessDp = 12f,
-                            shape = com.patrykandpatrick.vico.core.component.shape.Shapes.roundedCornerShape(40)
+                            shape = Shapes.roundedCornerShape(40)
                         )
                     )
                 ),
@@ -370,6 +348,6 @@ private fun PerformanceTableRow(
 @Composable
 fun MetricsTrackingScreenPreview() {
     BeybladeXTournamentManagerTheme {
-        MetricsTrackingScreen()
+        MetricsTab()
     }
 }

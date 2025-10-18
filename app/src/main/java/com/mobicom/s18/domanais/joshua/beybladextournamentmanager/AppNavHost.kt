@@ -14,7 +14,8 @@ fun AppNavHost(){
             RegisterScreenCredentials(
                 onRegisterScreenInfo = {
                     navController.navigate("registerScreenInfo")
-                }
+                },
+                onLoginClick = {navController.navigate("login")}
             )
         }
 
@@ -27,6 +28,14 @@ fun AppNavHost(){
             )
         }
 
+        composable("login") {
+            LoginScreen(
+                onLoginClick = {navController.navigate("home")},
+                onRegisterClick = {navController.navigate("registerScreenCredentials")}
+            )
+        }
+
+
         composable("home") {
             HomeScreen(
                 onProfileClick = {
@@ -37,17 +46,28 @@ fun AppNavHost(){
             },
            onJoinTournamentClick = {
                navController.navigate("joinTournament")
+           },
+            onCreateTournamentClick = {
+                navController.navigate("createTournament")
            }
-            //onCreateTournamentClick
             )
         }
 
         composable("joinTournament") {
             JoinTournamentScreen(
-                onBackClick = { navController.popBackStack()}
+                onBackClick = { navController.popBackStack()},
+                onJoinAsJudgeClick = {navController.navigate("tournament")},
+                onJoinAsPlayerClick = {navController.navigate("tournament")}
                 //onScanQRCodeClick: () -> Unit = {},
                // onJoinAsPlayerClick: () -> Unit = {},
                // onJoinAsJudgeClick: () -> Unit = {}
+            )
+        }
+
+        composable ("createTournament") {
+            CreateTournamentScreen(
+                onBackClick = { navController.popBackStack()},
+                onCreateTournamentClick = {navController.navigate("tournament")}
             )
         }
 
@@ -67,7 +87,15 @@ fun AppNavHost(){
                 onBackClick = { navController.popBackStack() },
                 onRecord = {
                     navController.navigate("Record Match")
-                }
+                },
+                onBuildSubmit = {navController.navigate("BuildSubmit")}
+            )
+        }
+
+        composable("BuildSubmit"){
+            FinalRoundBuildSubmissionScreen(
+                onBackClick = {navController.popBackStack()},
+                onSubmitClick = {navController.popBackStack()}
             )
         }
 
@@ -76,13 +104,29 @@ fun AppNavHost(){
                 onBackClick = { navController.popBackStack() },
                 onEditProfileClick = {
                     navController.navigate("editProfile")
-                }
+                },
+                onSettingsClick = {navController.navigate("settings")},
+                onNotificationsClick = {navController.navigate("notifs")}
             )
         }
 
         composable ("editProfile"){
             EditProfileScreen(
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable ("settings"){
+            SettingsScreen(
+                onBackClick = {navController.popBackStack()},
+                onLogoutClick = {navController.navigate("login")},
+                onAboutClick = {navController.navigate("About")}
+            )
+        }
+
+        composable ("notifs"){
+            NotificationsScreen(
+                onBackClick = {navController.popBackStack()}
             )
         }
 

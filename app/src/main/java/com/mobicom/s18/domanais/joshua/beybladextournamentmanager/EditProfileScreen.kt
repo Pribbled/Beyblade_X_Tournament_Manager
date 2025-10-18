@@ -87,7 +87,7 @@ fun EditProfileScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { /* TODO: Implement save logic */ },
+                onClick = { onBackClick() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
