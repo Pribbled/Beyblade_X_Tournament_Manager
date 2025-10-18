@@ -1,4 +1,3 @@
-
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs
 
 import androidx.compose.foundation.Canvas
@@ -103,7 +102,7 @@ fun MatchBracketCard(
 
 
 @Composable
-fun BracketTab() {
+fun BracketTab(onViewMatchClick: (Match) -> Unit) {
     val round1Matches = dummyRound1Matches
     val round2Matches = dummyRound2Matches
 
@@ -123,7 +122,7 @@ fun BracketTab() {
         ) {
             Text("Qualifiers", style = MaterialTheme.typography.titleLarge)
             round1Matches.forEach { match ->
-                MatchBracketCard(match)
+                MatchBracketCard(match, onViewMatchClick = onViewMatchClick)
             }
         }
 
@@ -134,7 +133,7 @@ fun BracketTab() {
         ) {
             Text("Semi Finals", style = MaterialTheme.typography.titleLarge)
             round2Matches.forEach { match ->
-                MatchBracketCard(match)
+                MatchBracketCard(match, onViewMatchClick = onViewMatchClick)
             }
         }
 
@@ -144,7 +143,7 @@ fun BracketTab() {
             verticalArrangement = Arrangement.spacedBy(220.dp)
         ) {
             Text("Finals", style = MaterialTheme.typography.titleLarge)
-            MatchBracketCard(dummyChampion)
+            MatchBracketCard(dummyChampion, onViewMatchClick = onViewMatchClick)
         }
     }
 }
@@ -153,6 +152,7 @@ fun BracketTab() {
 @Composable
 fun BracketTabPreview() {
     BeybladeXTournamentManagerTheme {
-        BracketTab()
+        val onViewMatchClick = null
+        BracketTab({ onViewMatchClick })
     }
 }

@@ -51,9 +51,19 @@ fun AppNavHost(){
 
         composable ("tournament") {
             TournamentDashboardScreen (
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onViewMatchClick = { match ->
+                    navController.navigate("View Match")
+                }
             )
 
+        }
+
+
+        composable("View Match"){
+            MatchDetailsScreen(
+                onBackClick = { navController.popBackStack() }
+            )
         }
     }
 
