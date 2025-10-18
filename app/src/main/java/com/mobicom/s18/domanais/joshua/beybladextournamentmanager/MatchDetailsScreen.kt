@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,6 +43,7 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun PlayerDetailsColumn(
     playerName: String,
+    playerScore: Int,
     playerWins: Int,
     playerLosses: Int,
     modifier: Modifier = Modifier
@@ -130,10 +132,10 @@ fun RoundDetail(
 }
 @Composable
 fun MatchDetailsComponent(
-    onRecord: () -> Unit = {},
-    onUpdateScore: () -> Unit = {}
+    onUpdateScore: () -> Unit = {},
+    onRecord: () -> Unit = {}
 ) {
-    var elapsed by remember { mutableStateOf(0L) } // seconds
+    var elapsed by remember { mutableLongStateOf(0L) } // seconds
     var running by remember { mutableStateOf(false) }
 
     LaunchedEffect(running) {
@@ -232,7 +234,8 @@ fun MatchDetailsComponent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchDetailsScreen(
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onRecord: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -328,7 +331,12 @@ fun MatchDetailsScreen(
 
             item { Spacer(modifier = Modifier.height(12.dp)) }
 
-            item { MatchDetailsComponent {  } }
+            item {
+                MatchDetailsComponent(
+                    onUpdateScore = {},
+                    onRecord = onRecord
+                )
+            }
 
             item { Spacer(modifier = Modifier.height(12.dp)) }
 
@@ -345,5 +353,5 @@ fun MatchDetailsScreen(
 @Preview
 @Composable
 fun MatchDetailsScreenPreview() {
-    MatchDetailsScreen()
+    MatchDetailsScreen(onRecord = {})
 }

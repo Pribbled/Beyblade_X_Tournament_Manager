@@ -29,7 +29,9 @@ fun AppNavHost(){
 
         composable("home") {
             HomeScreen(
-                //onProfileClick
+                onProfileClick = {
+                    navController.navigate("profile")
+                },
             onTournamentClick = {
                 navController.navigate("tournament")
             },
@@ -62,7 +64,31 @@ fun AppNavHost(){
 
         composable("View Match"){
             MatchDetailsScreen(
+                onBackClick = { navController.popBackStack() },
+                onRecord = {
+                    navController.navigate("Record Match")
+                }
+            )
+        }
+
+        composable("profile"){
+            ProfileScreen(
+                onBackClick = { navController.popBackStack() },
+                onEditProfileClick = {
+                    navController.navigate("editProfile")
+                }
+            )
+        }
+
+        composable ("editProfile"){
+            EditProfileScreen(
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable ("Record Match"){
+            MatchRecordingScreen(
+
             )
         }
     }
