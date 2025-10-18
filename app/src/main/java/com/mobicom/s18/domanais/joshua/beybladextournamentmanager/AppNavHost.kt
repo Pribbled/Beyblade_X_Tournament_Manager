@@ -91,6 +91,12 @@ fun AppNavHost(){
 
             )
         }
+
+        composable("About"){
+            AboutScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
     }
 
 }
