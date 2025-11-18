@@ -3,34 +3,63 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.*
 
-
 @Composable
 fun AppNavHost(){
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "registerScreenCredentials") {
+    val auth = FirebaseModule.auth
+    val startDestination = if (auth.currentUser != null) {
+        "home"
+    } else {
+        "login"
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
 
         composable("registerScreenCredentials") {
             RegisterScreenCredentials(
                 onRegisterScreenInfo = {
                     navController.navigate("registerScreenInfo")
                 },
-                onLoginClick = {navController.navigate("login")}
+                onLoginClick = {
+                    navController.navigate("login") {
+                        popUpTo("registerScreenCredentials") {
+                            inclusive = true
+                        }
+                    }
+                }
             )
         }
 
         composable("registerScreenInfo") {
             RegisterScreenInfo(
                 onRegistrationComplete = {
-                    //If there is login page go to login page
-                    navController.navigate("home")
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
                 }
             )
         }
 
         composable("login") {
             LoginScreen(
-                onLoginClick = {navController.navigate("home")},
+                onLoginSuccess = {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
+                onNewUser = {
+                    // Google Sign-In was a new user, send to Register Info screen
+                    navController.navigate("registerScreenInfo") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onRegisterClick = {navController.navigate("registerScreenCredentials")}
             )
         }
@@ -41,15 +70,15 @@ fun AppNavHost(){
                 onProfileClick = {
                     navController.navigate("profile")
                 },
-            onTournamentClick = {
-                navController.navigate("tournament")
-            },
-           onJoinTournamentClick = {
-               navController.navigate("joinTournament")
-           },
-            onCreateTournamentClick = {
-                navController.navigate("createTournament")
-           }
+                onTournamentClick = {
+                    navController.navigate("tournament")
+                },
+                onJoinTournamentClick = {
+                    navController.navigate("joinTournament")
+                },
+                onCreateTournamentClick = {
+                    navController.navigate("createTournament")
+                }
             )
         }
 
@@ -58,9 +87,6 @@ fun AppNavHost(){
                 onBackClick = { navController.popBackStack()},
                 onJoinAsJudgeClick = {navController.navigate("tournament")},
                 onJoinAsPlayerClick = {navController.navigate("tournament")}
-                //onScanQRCodeClick: () -> Unit = {},
-               // onJoinAsPlayerClick: () -> Unit = {},
-               // onJoinAsJudgeClick: () -> Unit = {}
             )
         }
 
@@ -119,7 +145,14 @@ fun AppNavHost(){
         composable ("settings"){
             SettingsScreen(
                 onBackClick = {navController.popBackStack()},
-                onLogoutClick = {navController.navigate("login")},
+                onLogoutClick = {
+                    auth.signOut()
+                    navController.navigate("login") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onAboutClick = {navController.navigate("About")}
             )
         }
@@ -132,7 +165,7 @@ fun AppNavHost(){
 
         composable ("Record Match"){
             MatchRecordingScreen(
-
+                onBackClick = { navController.popBackStack() }
             )
         }
 

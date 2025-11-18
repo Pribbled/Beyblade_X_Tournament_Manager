@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.sp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 @Composable
-fun MatchRecordingScreen() {
+fun MatchRecordingScreen(
+    onBackClick: () -> Unit = {}
+) {
     LockScreenOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
 
     var playerAScore by remember { mutableStateOf(0) }

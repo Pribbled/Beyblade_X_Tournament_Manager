@@ -82,11 +82,6 @@ fun AboutScreen(
                 text = "Karl Matthew Dela Cruz",
                 style = MaterialTheme.typography.bodyMedium
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Blue eyes white dragon",
-                style = MaterialTheme.typography.bodyMedium
-            )
             Spacer(modifier = Modifier.height(24.dp))
 
         }
