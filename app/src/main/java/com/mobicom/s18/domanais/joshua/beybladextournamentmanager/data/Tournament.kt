@@ -14,4 +14,13 @@ data class Tournament(
     val tieBreakRules: String = "",
     val allowSelfRegister: Boolean = false,
     val publicVisibility: Boolean = false,
+    val tournamentPlayers : List<String> = emptyList(),
+    val tournamentCode : String = generateTournamentCode()
 )
+
+fun generateTournamentCode(): String {
+    val characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    return (1..6)
+        .map { characters.random() }
+        .joinToString("")
+}

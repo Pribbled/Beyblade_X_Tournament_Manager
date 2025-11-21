@@ -314,7 +314,8 @@ fun CreateTournamentScreen(
                                     db.collection("publicTournaments")
                                         .document(documentRef.id)
                                         .set(tournament.copy(uid = documentRef.id,             // tournament ID
-                                            tournamentOwner= auth.currentUser!!.uid))
+                                            tournamentOwner= auth.currentUser!!.uid,
+                                            tournamentCode = tournament.tournamentCode ))
                                         .await()
                                     Log.d("CreateTournament", "Tournament added to public collection")
                                 } catch (e: Exception) {
