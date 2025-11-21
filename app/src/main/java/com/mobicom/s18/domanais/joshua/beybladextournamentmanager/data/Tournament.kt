@@ -1,0 +1,17 @@
+package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data
+
+/**
+ * Data class representing a user's profile stored in Firestore.
+ *
+
+ */
+data class Tournament(
+    val uid: String = "",
+    val tournamentOwner : String = "",
+    val name: String = "",
+    val tournamentFormat: String = "",
+    val scoringSystem: String = "",
+    val tieBreakRules: String = "",
+    val allowSelfRegister: Boolean = false,
+    val publicVisibility: Boolean = false,
+)

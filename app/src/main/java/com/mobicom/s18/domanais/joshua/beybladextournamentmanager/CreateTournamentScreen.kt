@@ -1,5 +1,6 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -11,7 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
+import kotlinx.coroutines.launch
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.tasks.await
+import kotlin.text.set
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +44,13 @@ fun CreateTournamentScreen(
     var allowSelfRegistration by remember { mutableStateOf(true) }
     var publicVisibility by remember { mutableStateOf(true) }
 
+
+    // --- Backend State ---
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope() // For launching backend tasks
+    val auth = FirebaseModule.auth
+    val db = FirebaseModule.db
     Scaffold(
         topBar = {
             TopAppBar(
@@ -228,10 +242,98 @@ fun CreateTournamentScreen(
                 }
             }
 
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = onCreateTournamentClick,
+                onClick = {
+                    scope.launch {
+                        isLoading = true
+                        errorMessage = null
+
+                        //validations for our fields
+
+                        if (tournamentName.isBlank()) {
+                            errorMessage = "Tournament name cannot be empty."
+                            isLoading = false
+                            return@launch
+                        }
+                        if(tieBreakRules.isBlank()){
+                            errorMessage = "Tie Breaker Rules cannot be empty."
+                            isLoading = false
+                            return@launch
+                        }
+                        val tournament = Tournament(
+                            uid = "", // Firebase will generate this
+                            tournamentOwner =  auth.currentUser?.uid ?: "",
+                            name = tournamentName,
+                            tournamentFormat = selectedFormatOption,
+                            scoringSystem = selectedScoringOption,
+                            tieBreakRules = tieBreakRules,
+                            allowSelfRegister = allowSelfRegistration,
+                            publicVisibility = publicVisibility
+                        )
+                        try {
+                            val currentUser = auth.currentUser
+                            if (currentUser == null) {
+                                errorMessage = "User not authenticated."
+                                isLoading = false
+                                return@launch
+                            }
+
+                        } catch (e: Exception) {
+                            errorMessage = "User not logged in: ${e.message}"
+                        }
+                        try {
+                            val documentRef = db.collection("users")
+                                .document(auth.currentUser?.uid ?: throw Exception("User not authenticated"))
+                                .collection("tournaments")
+                                .add(tournament)
+                                .addOnSuccessListener { documentReference ->
+                                    Log.d("CreateTournament", "Tournament created with ID: ${documentReference.id}")
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.w("CreateTournament", "Error creating tournament", e)
+                                    errorMessage = "${e.message}"
+                                }
+                                .await()
+
+
+                            documentRef.update("uid", documentRef.id).await()
+
+                            if (publicVisibility){
+                                    // Also add to global tournaments collection
+                                try {
+                                    db.collection("publicTournaments")
+                                        .document(documentRef.id)
+                                        .set(tournament.copy(uid = documentRef.id,             // tournament ID
+                                            tournamentOwner= auth.currentUser!!.uid))
+                                        .await()
+                                    Log.d("CreateTournament", "Tournament added to public collection")
+                                } catch (e: Exception) {
+                                    Log.w("CreateTournament", "Error adding to public collection", e)
+                                    errorMessage = "Tournament created but failed to make public: ${e.message}"
+                                }
+                            }
+                                onCreateTournamentClick()
+
+                        }catch (e: Exception) {
+                            errorMessage = "Error creating tournament: ${e.message}"
+                        }finally {
+                            isLoading = false
+                        }
+
+
+                    }
+
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
