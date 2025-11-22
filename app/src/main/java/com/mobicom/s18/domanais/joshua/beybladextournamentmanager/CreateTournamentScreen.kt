@@ -292,9 +292,7 @@ fun CreateTournamentScreen(
                             errorMessage = "User not logged in: ${e.message}"
                         }
                         try {
-                            val documentRef = db.collection("users")
-                                .document(auth.currentUser?.uid ?: throw Exception("User not authenticated"))
-                                .collection("tournaments")
+                            val documentRef = db.collection("tournaments")
                                 .add(tournament)
                                 .addOnSuccessListener { documentReference ->
                                     Log.d("CreateTournament", "Tournament created with ID: ${documentReference.id}")
@@ -308,21 +306,6 @@ fun CreateTournamentScreen(
 
                             documentRef.update("uid", documentRef.id).await()
 
-                            if (publicVisibility){
-                                    // Also add to global tournaments collection
-                                try {
-                                    db.collection("publicTournaments")
-                                        .document(documentRef.id)
-                                        .set(tournament.copy(uid = documentRef.id,             // tournament ID
-                                            tournamentOwner= auth.currentUser!!.uid,
-                                            tournamentCode = tournament.tournamentCode ))
-                                        .await()
-                                    Log.d("CreateTournament", "Tournament added to public collection")
-                                } catch (e: Exception) {
-                                    Log.w("CreateTournament", "Error adding to public collection", e)
-                                    errorMessage = "Tournament created but failed to make public: ${e.message}"
-                                }
-                            }
                                 onCreateTournamentClick()
 
                         }catch (e: Exception) {
