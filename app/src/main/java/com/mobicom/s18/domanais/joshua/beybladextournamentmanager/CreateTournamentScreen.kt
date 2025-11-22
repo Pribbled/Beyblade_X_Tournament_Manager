@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun CreateTournamentScreen(
     onBackClick: () -> Unit = {},
-    onCreateTournamentClick: () -> Unit = {}
+    onCreateTournamentClick: (String) -> Unit = {}
 ) {
     var tournamentName by remember { mutableStateOf("") }
     var tournamentFormat by remember { mutableStateOf("") }
@@ -365,7 +365,7 @@ fun CreateTournamentScreen(
 
                             documentRef.update("uid", documentRef.id).await()
 
-                                onCreateTournamentClick()
+                                onCreateTournamentClick(documentRef.id)
 
                         }catch (e: Exception) {
                             errorMessage = "Error creating tournament: ${e.message}"

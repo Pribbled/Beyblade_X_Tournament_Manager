@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
@@ -23,25 +25,73 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournamen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentDashboardScreen(
-    tournament: Tournament = Tournament(
-        uid = "preview1",
-        name = "Preview Tournament",
-        startDate = "Oct 25, 2025",
-        status = "upcoming",
-        tournamentPlayers = emptyList()
-    ),
+    tournamentId: String = "preview1",
     onBackClick: () -> Unit = {} ,
     onViewMatchClick: (Match) -> Unit = {}
 ) {
+    val db = FirebaseFirestore.getInstance()
+    var tournament by remember { mutableStateOf<Tournament?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
+
+    // Snapshot listener for real-time tournament updates
+    DisposableEffect(tournamentId) {
+        val listenerRegistration = db.collection("tournaments")
+            .document(tournamentId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("TournamentDashboard", "Listen failed.", error)
+                    isLoading = false
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    tournament = snapshot.toObject(Tournament::class.java)
+                    isLoading = false
+                } else {
+                    Log.d("TournamentDashboard", "Tournament not found")
+                    isLoading = false
+                }
+            }
+
+        // Cleanup listener when composable leaves composition
+        onDispose {
+            listenerRegistration.remove()
+        }
+    }
+
+    if (isLoading) {
+        // Show loading indicator
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (tournament == null) {
+        // Show error state
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        ) {
+            Text("Tournament not found")
+            Button(onClick = onBackClick) {
+                Text("Go Back")
+            }
+        }
+        return
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = tournament.name,
+                        text = tournament!!.name,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -78,7 +128,7 @@ fun TournamentDashboardScreen(
 
             // Content for each tab
             when (selectedTabIndex) {
-                0 -> OverviewTab(tournament)
+                0 -> OverviewTab(tournament!!)
                 1 -> MatchesTab(onViewMatchClick = onViewMatchClick)
                 2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                 3 -> MetricsTab()

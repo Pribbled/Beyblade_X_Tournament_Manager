@@ -62,8 +62,8 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournamen
 fun JoinTournamentScreen(
     onBackClick: () -> Unit = {},
     onScanQRCodeClick: () -> Unit = {},
-    onJoinAsPlayerClick: () -> Unit = {},
-    onJoinAsJudgeClick: () -> Unit = {}
+    onJoinAsPlayerClick: (String) -> Unit = {},
+    onJoinAsJudgeClick: (String) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope() // For launching backend tasks
     val auth = FirebaseModule.auth
@@ -163,6 +163,7 @@ fun JoinTournamentScreen(
                                 if (!result.isEmpty) {
                                     val doc = result.documents.first()
                                     val tournamentRef = doc.reference
+                                    val tournamentId = doc.id
 
 
                                     val tournament = doc.toObject(Tournament::class.java)
@@ -191,6 +192,7 @@ fun JoinTournamentScreen(
                                             "Successfully joined!",
                                             Toast.LENGTH_SHORT
                                         ).show()
+                                        onJoinAsPlayerClick(tournamentId)
                                     }
 
 
@@ -200,7 +202,6 @@ fun JoinTournamentScreen(
 
                                 // Handle error
                             }
-                            onJoinAsPlayerClick()
                             }
                     },
                     modifier = Modifier.weight(1f).width(150.dp),
@@ -229,6 +230,7 @@ fun JoinTournamentScreen(
                                 if (!result.isEmpty) {
                                     val doc = result.documents.first()
                                     val tournamentRef = doc.reference
+                                    val tournamentId = doc.id
 
 
                                     val tournament = doc.toObject(Tournament::class.java)
@@ -257,6 +259,7 @@ fun JoinTournamentScreen(
                                             "Successfully joined!",
                                             Toast.LENGTH_SHORT
                                         ).show()
+                                        onJoinAsJudgeClick(tournamentId)
                                     }
 
 
@@ -265,8 +268,6 @@ fun JoinTournamentScreen(
                                 Log.w("JoinTournament", "Error Joining tournament as Judge", e)
                                 // Handle error
                             }
-
-                            onJoinAsJudgeClick()
                         }
                     },
                     modifier = Modifier.weight(1f).width(150.dp),
