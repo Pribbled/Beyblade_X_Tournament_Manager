@@ -1,25 +1,37 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data
 
 /**
- * Data class representing a user's profile stored in Firestore.
- *
-
+ * Data class representing a Tournament with advanced configuration options.
  */
 data class Tournament(
     val uid: String = "",
-    val tournamentOwner : String = "",
+    val tournamentOwner: String = "",
     val name: String = "",
-    val tournamentFormat: String = "",
-    val scoringSystem: String = "",
-    val tieBreakRules: String = "",
+
+    // --- Structure Settings ---
+    val stageCount: Int = 1, // 1 or 2
+    val stage1Format: String = "", // e.g., "Round Robin", "Swiss System"
+    val stage2Format: String = "", // e.g., "Single Elimination" (Only used if stageCount == 2)
+
+    // --- Battle Rules ---
+    val battleType: String = "3on3 Deck", // Default Philippine Standard
+    val scoringSystem: String = "Standard (1-2-3)",
+
+    // --- Ranking & Tie Breakers ---
+    val rankingSystem: String = "Match Wins", // Default ranking metric
+    val tieBreaker1: String = "", // Priority 1
+    val tieBreaker2: String = "", // Priority 2
+    val tieBreaker3: String = "", // Priority 3
+
+    // --- General ---
+    val tieBreakRules: String = "", // Keeping for manual text notes if needed
     val allowSelfRegister: Boolean = false,
     val publicVisibility: Boolean = false,
-    val tournamentPlayers : List<String> = emptyList(),
-    val tournamentJudges : List<String> = emptyList(),
-    val tournamentCode : String = generateTournamentCode(),
+    val tournamentPlayers: List<String> = emptyList(),
+    val tournamentJudges: List<String> = emptyList(),
+    val tournamentCode: String = generateTournamentCode(),
     val status: String = "upcoming",
     val startDate: String = ""
-
 )
 
 fun generateTournamentCode(): String {
