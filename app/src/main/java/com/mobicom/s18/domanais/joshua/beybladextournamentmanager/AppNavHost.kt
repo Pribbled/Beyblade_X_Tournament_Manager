@@ -108,13 +108,18 @@ fun AppNavHost(){
         }
 
 
-        composable("View Match"){
+        composable("View Match/{tournamentId}/{matchId}") { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
             MatchDetailsScreen(
+                tournamentId = tournamentId,
+                matchId = matchId,
                 onBackClick = { navController.popBackStack() },
                 onRecord = {
                     navController.navigate("Record Match")
                 },
-                onBuildSubmit = {navController.navigate("BuildSubmit")}
+                onBuildSubmit = { navController.navigate("BuildSubmit") }
             )
         }
 
