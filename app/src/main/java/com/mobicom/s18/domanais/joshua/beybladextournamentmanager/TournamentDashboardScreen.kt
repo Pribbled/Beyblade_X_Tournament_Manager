@@ -11,12 +11,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.TournamentDashboardViewModel
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,10 +26,20 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 fun TournamentDashboardScreen(
     tournament: Tournament = dummyTournaments.first(), // Use a dummy tournament for preview
     onBackClick: () -> Unit = {} ,
-    onViewMatchClick: (Match) -> Unit = {}
+    onViewMatchClick: (Match) -> Unit = {},
+    viewModel: TournamentDashboardViewModel = viewModel()
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
+
+    // Collect matches from ViewModel
+    val matches by viewModel.matches.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    // Load matches when the composable is first displayed
+    LaunchedEffect(tournament.id) {
+        viewModel.loadMatches(tournament.id)
+    }
 
     Scaffold(
         topBar = {
@@ -71,9 +83,16 @@ fun TournamentDashboardScreen(
 
             // Content for each tab
             when (selectedTabIndex) {
-                0 -> OverviewTab(tournament)
-                1 -> MatchesTab(onViewMatchClick = onViewMatchClick)
-                2 -> BracketTab(onViewMatchClick = onViewMatchClick)
+                0 -> OverviewTab(tournament = tournament, viewModel = viewModel)
+                1 -> MatchesTab(
+                    matches = matches,
+                    isLoading = isLoading,
+                    onViewMatchClick = onViewMatchClick
+                )
+                2 -> BracketTab(
+                    matches = matches,
+                    onViewMatchClick = onViewMatchClick
+                )
                 3 -> MetricsTab()
             }
         }

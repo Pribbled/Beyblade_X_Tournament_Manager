@@ -27,7 +27,7 @@ data class Match(
     val player2Losses: Int = 0,
 
     // Match state
-    val status: String = "upcoming", // "upcoming", "in_progress", "completed"
+    val status: String = "scheduled", // "scheduled", "in_progress", "completed"
     val currentRound: Int = 1,
     val winnerId: String? = null,
     val winnerName: String? = null,

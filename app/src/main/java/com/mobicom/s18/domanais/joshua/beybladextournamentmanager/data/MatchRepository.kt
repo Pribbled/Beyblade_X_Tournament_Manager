@@ -20,6 +20,53 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
     }
 
     /**
+     * Get all matches for a tournament with real-time updates.
+     * Returns a Flow that emits the updated list whenever matches change in Firestore.
+     * The list is automatically sorted by matchNumber for consistent display.
+     *
+     * @param tournamentId The ID of the tournament
+     * @return Flow emitting lists of Match objects, sorted by matchNumber
+     */
+    fun getMatches(tournamentId: String): Flow<List<Match>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+
+        try {
+            listenerRegistration = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(MATCHES_COLLECTION)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        // Log error but don't close the flow - keep listening
+                        println("Error listening to matches: ${error.message}")
+                        trySend(emptyList()) // Send empty list on error
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+                        // Map documents to Match objects and sort by matchNumber
+                        val matches = snapshot.documents
+                            .mapNotNull { it.toObject(Match::class.java) }
+                            .sortedBy { it.matchNumber }
+
+                        trySend(matches)
+                    } else {
+                        trySend(emptyList())
+                    }
+                }
+
+            // Wait for the flow to be closed
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        } catch (e: Exception) {
+            trySend(emptyList())
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        }
+    }
+
+    /**
      * Fetch a single match document by ID (one-time read)
      *
      * @param tournamentId The ID of the tournament
@@ -39,6 +86,51 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
             Result.success(match)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Get match details with real-time updates.
+     * Returns a Flow that emits Match objects whenever the document changes in Firestore.
+     *
+     * This is the primary function for the Match Details screen to get live updates
+     * when scores, status, or other fields are modified.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param matchId The ID of the match to fetch
+     * @return Flow emitting Match objects on every update, or null if not found
+     */
+    fun getMatchDetails(tournamentId: String, matchId: String): Flow<Match?> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+
+        try {
+            listenerRegistration = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(MATCHES_COLLECTION)
+                .document(matchId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        println("Error listening to match: ${error.message}")
+                        trySend(null)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        val match = snapshot.toObject(Match::class.java)
+                        trySend(match)
+                    } else {
+                        trySend(null)
+                    }
+                }
+
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        } catch (e: Exception) {
+            trySend(null)
+            awaitClose {
+                listenerRegistration?.remove()
+            }
         }
     }
 
@@ -187,6 +279,76 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
     }
 
     /**
+     * Update match scores with automatic winner detection and status update.
+     *
+     * This function updates the player scores and automatically:
+     * - Determines the winner if a player reaches the winning threshold (4 points)
+     * - Updates match status to "completed" when there's a winner
+     * - Sets winnerId and winnerName fields
+     * - Updates both score and wins fields (UI displays wins)
+     *
+     * @param tournamentId The ID of the tournament
+     * @param matchId The ID of the match
+     * @param player1Score New score for player 1
+     * @param player2Score New score for player 2
+     * @return Result indicating success or failure
+     */
+    suspend fun updateMatchScore(
+        tournamentId: String,
+        matchId: String,
+        player1Score: Int,
+        player2Score: Int
+    ): Result<Unit> {
+        return try {
+            // First, get the current match to access player IDs and names
+            val matchDoc = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(MATCHES_COLLECTION)
+                .document(matchId)
+                .get()
+                .await()
+
+            val currentMatch = matchDoc.toObject(Match::class.java)
+                ?: return Result.failure(Exception("Match not found"))
+
+            // Determine if there's a winner (first to 4 points)
+            val winningScore = 4
+            val hasWinner = player1Score >= winningScore || player2Score >= winningScore
+
+            val updates = mutableMapOf<String, Any>(
+                "player1Score" to player1Score,
+                "player2Score" to player2Score,
+                "player1Wins" to player1Score,  // UI displays wins field
+                "player2Wins" to player2Score,  // UI displays wins field
+                "player1Losses" to player2Score,  // Losses = opponent's score
+                "player2Losses" to player1Score,  // Losses = opponent's score
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+
+            // If there's a winner, update status and winner fields
+            if (hasWinner) {
+                val isPlayer1Winner = player1Score > player2Score
+
+                updates["status"] = "completed"
+                updates["winnerId"] = if (isPlayer1Winner) currentMatch.player1Id else currentMatch.player2Id
+                updates["winnerName"] = if (isPlayer1Winner) currentMatch.player1Name else currentMatch.player2Name
+                updates["endTime"] = com.google.firebase.Timestamp.now()
+            } else if (currentMatch.status == "scheduled") {
+                // If match is starting (first score update), set to in_progress
+                updates["status"] = "in_progress"
+                updates["startTime"] = com.google.firebase.Timestamp.now()
+            }
+
+            // Update the match document
+            matchDoc.reference.update(updates).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get all matches for a tournament
      *
      * @param tournamentId The ID of the tournament
@@ -205,6 +367,266 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
             }
 
             Result.success(matches)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Generate bracket for a tournament with initial Round 1 matches.
+     * This creates match pairings for all participants.
+     *
+     * TEMPORARY: Uses mock participant data since Join Tournament feature is not implemented yet.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param tournamentFormat The format of the tournament (e.g., "First to Four", "Best of 5")
+     * @return Result indicating success or failure with match count
+     */
+    suspend fun generateBracket(
+        tournamentId: String,
+        tournamentFormat: String = "First to Four"
+    ): Result<Int> {
+        return try {
+            // MOCK DATA - Replace this when Join Tournament feature is implemented
+            val mockParticipants = listOf(
+                "user_001" to "Alice",
+                "user_002" to "Bob",
+                "user_003" to "Charlie",
+                "user_004" to "Diana",
+                "user_005" to "Eve",
+                "user_006" to "Frank",
+                "user_007" to "Grace",
+                "user_008" to "Henry"
+            )
+
+            // Shuffle participants for random pairings
+            val shuffledParticipants = mockParticipants.shuffled()
+
+            // Create match pairings
+            val batch = db.batch()
+            var matchNumber = 1
+            val matches = mutableListOf<Match>()
+
+            // Pair up players (2 at a time)
+            for (i in shuffledParticipants.indices step 2) {
+                if (i + 1 < shuffledParticipants.size) {
+                    // Normal pairing: two players
+                    val player1 = shuffledParticipants[i]
+                    val player2 = shuffledParticipants[i + 1]
+
+                    val matchId = "match_${tournamentId}_round1_$matchNumber"
+                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournamentId)
+                        .collection(MATCHES_COLLECTION)
+                        .document(matchId)
+
+                    val match = Match(
+                        matchId = matchId,
+                        tournamentId = tournamentId,
+                        matchNumber = matchNumber,
+                        round = "Round 1",
+                        format = tournamentFormat,
+                        player1Id = player1.first,
+                        player1Name = player1.second,
+                        player1Score = 0,
+                        player1Wins = 0,
+                        player1Losses = 0,
+                        player2Id = player2.first,
+                        player2Name = player2.second,
+                        player2Score = 0,
+                        player2Wins = 0,
+                        player2Losses = 0,
+                        status = "scheduled",
+                        currentRound = 1,
+                        winnerId = null,
+                        winnerName = null,
+                        startTime = null,
+                        endTime = null,
+                        elapsedSeconds = 0L,
+                        rounds = emptyList(),
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        updatedAt = com.google.firebase.Timestamp.now()
+                    )
+
+                    batch.set(matchRef, match)
+                    matches.add(match)
+                    matchNumber++
+                } else {
+                    // Odd number of players: last player gets a BYE
+                    val player1 = shuffledParticipants[i]
+
+                    val matchId = "match_${tournamentId}_round1_$matchNumber"
+                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournamentId)
+                        .collection(MATCHES_COLLECTION)
+                        .document(matchId)
+
+                    val match = Match(
+                        matchId = matchId,
+                        tournamentId = tournamentId,
+                        matchNumber = matchNumber,
+                        round = "Round 1",
+                        format = tournamentFormat,
+                        player1Id = player1.first,
+                        player1Name = player1.second,
+                        player1Score = 0,
+                        player1Wins = 0,
+                        player1Losses = 0,
+                        player2Id = "BYE",
+                        player2Name = "BYE",
+                        player2Score = 0,
+                        player2Wins = 0,
+                        player2Losses = 0,
+                        status = "completed", // BYE matches are auto-completed
+                        currentRound = 1,
+                        winnerId = player1.first,
+                        winnerName = player1.second,
+                        startTime = com.google.firebase.Timestamp.now(),
+                        endTime = com.google.firebase.Timestamp.now(),
+                        elapsedSeconds = 0L,
+                        rounds = emptyList(),
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        updatedAt = com.google.firebase.Timestamp.now()
+                    )
+
+                    batch.set(matchRef, match)
+                    matches.add(match)
+                    matchNumber++
+                }
+            }
+
+            // Commit all matches atomically
+            batch.commit().await()
+
+            Result.success(matches.size)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Generate bracket with custom participant list.
+     * Use this when the Join Tournament feature is implemented.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param participants List of pairs (userId, userName)
+     * @param tournamentFormat The format of the tournament
+     * @return Result indicating success or failure with match count
+     */
+    suspend fun generateBracketWithParticipants(
+        tournamentId: String,
+        participants: List<Pair<String, String>>,
+        tournamentFormat: String = "First to Four"
+    ): Result<Int> {
+        return try {
+            if (participants.isEmpty()) {
+                return Result.failure(IllegalArgumentException("No participants provided"))
+            }
+
+            if (participants.size < 2) {
+                return Result.failure(IllegalArgumentException("At least 2 participants required"))
+            }
+
+            // Shuffle participants for random pairings
+            val shuffledParticipants = participants.shuffled()
+
+            // Create match pairings
+            val batch = db.batch()
+            var matchNumber = 1
+            val matches = mutableListOf<Match>()
+
+            // Pair up players (2 at a time)
+            for (i in shuffledParticipants.indices step 2) {
+                if (i + 1 < shuffledParticipants.size) {
+                    // Normal pairing: two players
+                    val player1 = shuffledParticipants[i]
+                    val player2 = shuffledParticipants[i + 1]
+
+                    val matchId = "match_${tournamentId}_round1_$matchNumber"
+                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournamentId)
+                        .collection(MATCHES_COLLECTION)
+                        .document(matchId)
+
+                    val match = Match(
+                        matchId = matchId,
+                        tournamentId = tournamentId,
+                        matchNumber = matchNumber,
+                        round = "Round 1",
+                        format = tournamentFormat,
+                        player1Id = player1.first,
+                        player1Name = player1.second,
+                        player1Score = 0,
+                        player1Wins = 0,
+                        player1Losses = 0,
+                        player2Id = player2.first,
+                        player2Name = player2.second,
+                        player2Score = 0,
+                        player2Wins = 0,
+                        player2Losses = 0,
+                        status = "scheduled",
+                        currentRound = 1,
+                        winnerId = null,
+                        winnerName = null,
+                        startTime = null,
+                        endTime = null,
+                        elapsedSeconds = 0L,
+                        rounds = emptyList(),
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        updatedAt = com.google.firebase.Timestamp.now()
+                    )
+
+                    batch.set(matchRef, match)
+                    matches.add(match)
+                    matchNumber++
+                } else {
+                    // Odd number of players: last player gets a BYE
+                    val player1 = shuffledParticipants[i]
+
+                    val matchId = "match_${tournamentId}_round1_$matchNumber"
+                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournamentId)
+                        .collection(MATCHES_COLLECTION)
+                        .document(matchId)
+
+                    val match = Match(
+                        matchId = matchId,
+                        tournamentId = tournamentId,
+                        matchNumber = matchNumber,
+                        round = "Round 1",
+                        format = tournamentFormat,
+                        player1Id = player1.first,
+                        player1Name = player1.second,
+                        player1Score = 0,
+                        player1Wins = 0,
+                        player1Losses = 0,
+                        player2Id = "BYE",
+                        player2Name = "BYE",
+                        player2Score = 0,
+                        player2Wins = 0,
+                        player2Losses = 0,
+                        status = "completed", // BYE matches are auto-completed
+                        currentRound = 1,
+                        winnerId = player1.first,
+                        winnerName = player1.second,
+                        startTime = com.google.firebase.Timestamp.now(),
+                        endTime = com.google.firebase.Timestamp.now(),
+                        elapsedSeconds = 0L,
+                        rounds = emptyList(),
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        updatedAt = com.google.firebase.Timestamp.now()
+                    )
+
+                    batch.set(matchRef, match)
+                    matches.add(match)
+                    matchNumber++
+                }
+            }
+
+            // Commit all matches atomically
+            batch.commit().await()
+
+            Result.success(matches.size)
         } catch (e: Exception) {
             Result.failure(e)
         }

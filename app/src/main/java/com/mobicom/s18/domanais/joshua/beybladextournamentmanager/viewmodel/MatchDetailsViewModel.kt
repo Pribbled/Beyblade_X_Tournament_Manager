@@ -28,6 +28,7 @@ class MatchDetailsViewModel(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning.asStateFlow()
 
+
     /**
      * Load match details (one-time fetch)
      */
@@ -56,27 +57,25 @@ class MatchDetailsViewModel(
     }
 
     /**
-     * Listen to real-time match updates
+     * Listen to real-time match updates using the new getMatchDetails function.
+     * This provides live updates whenever the match document changes in Firestore.
      */
     fun listenToMatch(tournamentId: String, matchId: String) {
         viewModelScope.launch {
             _matchState.value = MatchUiState.Loading
 
-            repository.listenToMatch(tournamentId, matchId).collect { result ->
-                result.fold(
-                    onSuccess = { match ->
-                        if (match != null) {
-                            _matchState.value = MatchUiState.Success(match)
-                            _elapsedTime.value = match.elapsedSeconds
-                        } else {
-                            _matchState.value = MatchUiState.Error("Match not found")
-                        }
-                    },
-                    onFailure = { exception ->
-                        _matchState.value = MatchUiState.Error(
-                            exception.message ?: "Failed to listen to match updates"
-                        )
+            try {
+                repository.getMatchDetails(tournamentId, matchId).collect { match ->
+                    if (match != null) {
+                        _matchState.value = MatchUiState.Success(match)
+                        _elapsedTime.value = match.elapsedSeconds
+                    } else {
+                        _matchState.value = MatchUiState.Error("Match not found")
                     }
+                }
+            } catch (e: Exception) {
+                _matchState.value = MatchUiState.Error(
+                    e.message ?: "Failed to listen to match updates"
                 )
             }
         }
@@ -164,6 +163,30 @@ class MatchDetailsViewModel(
     fun resetTimer() {
         _elapsedTime.value = 0L
         _isTimerRunning.value = false
+    }
+
+    /**
+     * Submit match result from the recording screen.
+     * Updates scores in Firestore with automatic winner detection.
+     *
+     * @param tournamentId The tournament ID
+     * @param matchId The match ID
+     * @param player1Score Final score for player 1
+     * @param player2Score Final score for player 2
+     * @return Result indicating success or failure
+     */
+    suspend fun submitMatchResult(
+        tournamentId: String,
+        matchId: String,
+        player1Score: Int,
+        player2Score: Int
+    ): Result<Unit> {
+        return repository.updateMatchScore(
+            tournamentId = tournamentId,
+            matchId = matchId,
+            player1Score = player1Score,
+            player2Score = player2Score
+        )
     }
 }
 

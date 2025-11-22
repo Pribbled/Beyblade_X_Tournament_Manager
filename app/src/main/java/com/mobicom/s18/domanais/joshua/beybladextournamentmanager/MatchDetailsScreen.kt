@@ -195,6 +195,7 @@ fun MatchDetailsScreen(
             )
         }
     ) { paddingValues ->
+
         when (val state = matchState) {
             is MatchUiState.Loading -> {
                 Box(
@@ -392,21 +393,10 @@ fun MatchDetailsContent(
                     OutlinedButton(
                         onClick = onRecord,
                         modifier = Modifier
-                            .width(160.dp)
-                            .height(44.dp)
+                            .width(200.dp)
+                            .height(48.dp)
                     ) {
-                        Text("Record Match")
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    OutlinedButton(
-                        onClick = { /* Handle update score */ },
-                        modifier = Modifier
-                            .width(160.dp)
-                            .height(44.dp)
-                    ) {
-                        Text("Update Score")
+                        Text("Record Match", style = MaterialTheme.typography.titleMedium)
                     }
                 }
 
@@ -484,3 +474,5 @@ fun MatchDetailsScreenPreview() {
         onBuildSubmit = {}
     )
 }
+
+
