@@ -1,7 +1,7 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
 /**
- * Match Recording Screen - Integrated with Firestore
+ * Match Recording Screen - CameraX Live Recording with Auto-Submit
  *
  * HOW TO USE IN APPNAVHOST:
  *
@@ -23,8 +23,19 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
  * }
  */
 
+import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.pm.ActivityInfo
+import android.net.Uri
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.*
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,29 +51,70 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchDetailsViewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchRecordingViewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchUiState
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.VideoUploadState
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.Executor
 
 @Composable
 fun MatchRecordingScreen(
     tournamentId: String = "",
     matchId: String = "",
     onBackClick: () -> Unit = {},
-    viewModel: MatchDetailsViewModel = viewModel()
+    viewModel: MatchDetailsViewModel = viewModel(),
+    recordingViewModel: MatchRecordingViewModel = viewModel()
 ) {
     LockScreenOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
 
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Permission launcher
+    var hasCameraPermission by remember { mutableStateOf(false) }
+    var hasAudioPermission by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasCameraPermission = permissions[Manifest.permission.CAMERA] ?: false
+        hasAudioPermission = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+
+        if (!hasCameraPermission || !hasAudioPermission) {
+            Toast.makeText(context, "Camera and Audio permissions are required", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Request permissions on launch
+    LaunchedEffect(Unit) {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO
+            )
+        )
+    }
+
     // Observe match state from ViewModel to get real player names
     val matchState by viewModel.matchState.collectAsState()
+
+    // Observe video upload state
+    val uploadState by recordingViewModel.uploadState.collectAsState()
 
     // Load match details on first composition
     LaunchedEffect(tournamentId, matchId) {
@@ -75,14 +127,13 @@ fun MatchRecordingScreen(
     var playerAScore by remember { mutableStateOf(0) }
     var playerBScore by remember { mutableStateOf(0) }
     var isRecording by remember { mutableStateOf(false) }
-    var recordingFinished by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
 
     // Dialog states
     var showPlayerAEditDialog by remember { mutableStateOf(false) }
     var showPlayerBEditDialog by remember { mutableStateOf(false) }
+    var showCompleteDialog by remember { mutableStateOf(false) }
 
-    // Submission state
-    var isSubmitting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     // Get player names from match data or use defaults
@@ -95,6 +146,33 @@ fun MatchRecordingScreen(
         else -> "Blader B"
     }
 
+    // CameraX state
+    var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    var recording by remember { mutableStateOf<Recording?>(null) }
+    var savedVideoUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Handle upload completion
+    LaunchedEffect(uploadState) {
+        when (uploadState) {
+            is VideoUploadState.Success -> {
+                isProcessing = false
+                showCompleteDialog = true
+                recordingViewModel.resetUploadState()
+            }
+            is VideoUploadState.Error -> {
+                isProcessing = false
+                Toast.makeText(
+                    context,
+                    "Upload failed: ${(uploadState as VideoUploadState.Error).message}",
+                    Toast.LENGTH_LONG
+                ).show()
+                recordingViewModel.resetUploadState()
+            }
+            else -> { /* Do nothing for Idle and Loading */ }
+        }
+    }
+
+    // Show edit dialogs
     if (showPlayerAEditDialog) {
         ManualScoreEditDialog(
             currentScore = playerAScore,
@@ -117,30 +195,92 @@ fun MatchRecordingScreen(
         )
     }
 
+    // Complete dialog
+    if (showCompleteDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Match Complete!") },
+            text = { Text("Scores saved and video uploaded successfully.") },
+            confirmButton = {
+                Button(onClick = {
+                    showCompleteDialog = false
+                    onBackClick()
+                }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Left screen - Player A
+        // CameraX Preview (Bottom Layer)
+        if (hasCameraPermission && hasAudioPermission && !LocalInspectionMode.current) {
+            CameraPreview(
+                modifier = Modifier.fillMaxSize(),
+                onVideoCaptureReady = { capture ->
+                    videoCapture = capture
+                }
+            )
+        } else {
+            // Fallback black background for preview mode
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            )
+        }
+
+        // Processing overlay
+        if (isProcessing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(64.dp),
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Uploading & Saving...",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Left screen - Player A (Score UI Overlay)
         PlayerControls(
             modifier = Modifier.align(Alignment.CenterStart),
             playerName = playerAName,
             playerScore = playerAScore,
             onScoreChange = { playerAScore = it },
-            onEditClick = { showPlayerAEditDialog = true }
+            onEditClick = { showPlayerAEditDialog = true },
+            enabled = isRecording && !isProcessing
         )
 
-        // Right screen - Player B
+        // Right screen - Player B (Score UI Overlay)
         PlayerControls(
             modifier = Modifier.align(Alignment.CenterEnd),
             playerName = playerBName,
             playerScore = playerBScore,
             onScoreChange = { playerBScore = it },
-            onEditClick = { showPlayerBEditDialog = true }
+            onEditClick = { showPlayerBEditDialog = true },
+            enabled = isRecording && !isProcessing
         )
 
-        // Bottom control buttons
+        // Bottom control buttons (Overlay)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -148,87 +288,161 @@ fun MatchRecordingScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Submit Score Button (Checkmark)
-            IconButton(
-                onClick = {
-                    if (tournamentId.isNotEmpty() && matchId.isNotEmpty()) {
-                        coroutineScope.launch {
-                            isSubmitting = true
-
-                            // Submit the final scores to Firestore
-                            val result = viewModel.submitMatchResult(
-                                tournamentId = tournamentId,
-                                matchId = matchId,
-                                player1Score = playerAScore,
-                                player2Score = playerBScore
-                            )
-
-                            result.onSuccess {
-                                // Navigate back to Match Details on success
-                                onBackClick()
-                            }.onFailure {
-                                // TODO: Show error message if needed
-                                isSubmitting = false
-                            }
-                        }
-                    } else {
-                        // If no IDs provided (preview mode), just go back
-                        onBackClick()
-                    }
-                },
-                modifier = Modifier.size(56.dp),
-                enabled = !isSubmitting
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        color = Color.White
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Submit Score",
-                        tint = Color.White,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
             // Record/Stop Button
             IconButton(
                 onClick = {
-                    isRecording = !isRecording
-                    if (!isRecording) recordingFinished = true
+                    if (!isRecording) {
+                        // Start recording
+                        val videoFile = createVideoFile(context)
+                        val outputOptions = FileOutputOptions.Builder(videoFile).build()
+
+                        recording = videoCapture?.output
+                            ?.prepareRecording(context, outputOptions)
+                            ?.withAudioEnabled()
+                            ?.start(ContextCompat.getMainExecutor(context)) { event ->
+                                when (event) {
+                                    is VideoRecordEvent.Finalize -> {
+                                        if (event.hasError()) {
+                                            Toast.makeText(
+                                                context,
+                                                "Recording error: ${event.error}",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            isProcessing = false
+                                        } else {
+                                            savedVideoUri = Uri.fromFile(videoFile)
+
+                                            // AUTO-SUBMIT: Save scores and upload video
+                                            coroutineScope.launch {
+                                                isProcessing = true
+
+                                                // Step 1: Submit match scores to Firestore
+                                                val scoreResult = viewModel.submitMatchResult(
+                                                    tournamentId = tournamentId,
+                                                    matchId = matchId,
+                                                    player1Score = playerAScore,
+                                                    player2Score = playerBScore
+                                                )
+
+                                                scoreResult.onSuccess {
+                                                    // Step 2: Upload video to Supabase Storage
+                                                    savedVideoUri?.let { uri ->
+                                                        recordingViewModel.uploadVideo(
+                                                            context = context,
+                                                            tournamentId = tournamentId,
+                                                            matchId = matchId,
+                                                            videoUri = uri
+                                                        )
+                                                    } ?: run {
+                                                        isProcessing = false
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Video file not found",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
+                                                }.onFailure { error ->
+                                                    isProcessing = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Failed to save scores: ${error.message}",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                        isRecording = true
+                        Toast.makeText(context, "Recording started", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // Stop recording (triggers auto-submit in Finalize event)
+                        recording?.stop()
+                        recording = null
+                        isRecording = false
+                    }
                 },
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(80.dp),
+                enabled = !isProcessing && hasCameraPermission && hasAudioPermission
             ) {
                 Icon(
                     imageVector = if (isRecording)
                         ImageVector.vectorResource(R.drawable.baseline_stop_24)
                     else
                         Icons.Default.PlayArrow,
-                    contentDescription = "Record",
+                    contentDescription = if (isRecording) "Stop Recording" else "Start Recording",
                     tint = if (isRecording) Color.Red else Color.White,
                     modifier = Modifier.fillMaxSize()
                 )
             }
-
-            // Slow Motion Replay Button (appears after recording)
-            AnimatedVisibility(visible = recordingFinished) {
-                IconButton(
-                    onClick = { /* TODO: Play replay in slo-mo */ },
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Icon(
-                        imageVector = ImageVector.vectorResource(R.drawable.outline_slow_motion_video_24),
-                        contentDescription = "Slow Motion Replay",
-                        tint = Color.White,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
         }
     }
+}
+
+/**
+ * CameraX Preview Composable
+ */
+@Composable
+fun CameraPreview(
+    modifier: Modifier = Modifier,
+    onVideoCaptureReady: (VideoCapture<Recorder>) -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    AndroidView(
+        factory = { ctx ->
+            val previewView = PreviewView(ctx)
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
+
+                // Preview use case
+                val preview = androidx.camera.core.Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+                // VideoCapture use case
+                val recorder = Recorder.Builder()
+                    .setQualitySelector(QualitySelector.from(Quality.HD))
+                    .build()
+                val videoCapture = VideoCapture.withOutput(recorder)
+
+                // Select back camera
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                try {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        preview,
+                        videoCapture
+                    )
+
+                    // Notify parent that VideoCapture is ready
+                    onVideoCaptureReady(videoCapture)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(ctx))
+
+            previewView
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * Create a temporary video file in cache directory
+ */
+fun createVideoFile(context: android.content.Context): File {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val fileName = "MATCH_$timeStamp.mp4"
+    return File(context.cacheDir, fileName)
 }
 
 @Composable
@@ -237,7 +451,8 @@ fun PlayerControls(
     playerName: String,
     playerScore: Int,
     onScoreChange: (Int) -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     Column(
         modifier = modifier.padding(horizontal = 24.dp),
@@ -249,7 +464,7 @@ fun PlayerControls(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .padding(top = 16.dp)
-                .clickable(onClick = onEditClick)
+                .clickable(enabled = enabled, onClick = onEditClick)
         ) {
             Text(
                 text = playerName,
@@ -273,16 +488,32 @@ fun PlayerControls(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val buttonModifier = Modifier.width(150.dp)
-            Button(onClick = { onScoreChange(playerScore + 3) }, modifier = buttonModifier) {
+            Button(
+                onClick = { onScoreChange(playerScore + 3) },
+                modifier = buttonModifier,
+                enabled = enabled
+            ) {
                 Text("Extreme Finish")
             }
-            Button(onClick = { onScoreChange(playerScore + 2) }, modifier = buttonModifier) {
+            Button(
+                onClick = { onScoreChange(playerScore + 2) },
+                modifier = buttonModifier,
+                enabled = enabled
+            ) {
                 Text("Burst Finish")
             }
-            Button(onClick = { onScoreChange(playerScore + 1) }, modifier = buttonModifier) {
+            Button(
+                onClick = { onScoreChange(playerScore + 1) },
+                modifier = buttonModifier,
+                enabled = enabled
+            ) {
                 Text("Over Finish")
             }
-            Button(onClick = { onScoreChange(playerScore + 1) }, modifier = buttonModifier) {
+            Button(
+                onClick = { onScoreChange(playerScore + 1) },
+                modifier = buttonModifier,
+                enabled = enabled
+            ) {
                 Text("Spin Finish")
             }
         }

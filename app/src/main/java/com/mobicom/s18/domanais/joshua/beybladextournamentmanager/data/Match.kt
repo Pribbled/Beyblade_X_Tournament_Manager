@@ -40,6 +40,9 @@ data class Match(
     // Round details
     val rounds: List<RoundDetail> = emptyList(),
 
+    // Media
+    val videoUrl: String? = null, // Download URL of the uploaded match video
+
     // Metadata
     val createdAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now()

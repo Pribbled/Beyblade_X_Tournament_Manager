@@ -1,8 +1,13 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data
 
+import android.content.Context
+import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.SupabaseClient
+import io.github.jan.supabase.storage.storage
+import io.github.jan.supabase.storage.upload
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -12,7 +17,9 @@ import kotlinx.coroutines.tasks.await
  * Repository for Match-related Firestore operations.
  * Provides methods to read, write, and listen to match data.
  */
-class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
+class MatchRepository(
+    private val db: FirebaseFirestore = FirebaseModule.db
+) {
 
     companion object {
         private const val TOURNAMENTS_COLLECTION = "tournaments"
@@ -903,6 +910,84 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
 
             Result.success(Unit)
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Upload a match video to Supabase Storage and save the download URL to Firestore.
+     *
+     * This function handles the complete workflow:
+     * 1. Reads the video file bytes from the Uri
+     * 2. Uploads the video to Supabase Storage bucket 'tournament_videos' at path: tournaments/{tournamentId}/{matchId}.mp4
+     * 3. Retrieves the public URL from Supabase
+     * 4. Updates the match document in Firestore with the videoUrl field
+     *
+     * @param context The Android context needed to read the Uri
+     * @param tournamentId The ID of the tournament
+     * @param matchId The ID of the match
+     * @param videoUri The local Uri of the video file to upload
+     * @return Result containing the public URL on success, or an error
+     *
+     * Example usage:
+     * ```
+     * val result = matchRepository.uploadMatchVideo(
+     *     context = context,
+     *     tournamentId = "tournament_123",
+     *     matchId = "match_456",
+     *     videoUri = Uri.parse("content://...")
+     * )
+     *
+     * result.onSuccess { publicUrl ->
+     *     println("Video uploaded successfully: $publicUrl")
+     * }.onFailure { error ->
+     *     println("Upload failed: ${error.message}")
+     * }
+     * ```
+     */
+    suspend fun uploadMatchVideo(
+        context: Context,
+        tournamentId: String,
+        matchId: String,
+        videoUri: Uri
+    ): Result<String> {
+        return try {
+            // Step 1: Read video bytes from Uri
+            val videoBytes = context.contentResolver.openInputStream(videoUri)?.use { inputStream ->
+                inputStream.readBytes()
+            } ?: return Result.failure(IllegalArgumentException("Unable to read video from Uri"))
+
+            // Step 2: Define the storage path within the bucket
+            val storagePath = "tournaments/$tournamentId/$matchId.mp4"
+
+            // Step 3: Upload to Supabase Storage with upsert=true
+            val bucket = SupabaseClient.client.storage.from("tournament_videos")
+            bucket.upload(
+                path = storagePath,
+                data = videoBytes,
+                upsert = true
+            )
+
+            // Step 4: Get the public URL
+            val publicUrl = bucket.publicUrl(storagePath)
+
+            // Step 5: Update Firestore match document with the video URL
+            val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(MATCHES_COLLECTION)
+                .document(matchId)
+
+            val updates = mapOf(
+                "videoUrl" to publicUrl,
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+
+            matchRef.update(updates).await()
+
+            // Step 6: Return the public URL
+            Result.success(publicUrl)
+        } catch (e: Exception) {
+            // Handle any errors during upload or Firestore update
             Result.failure(e)
         }
     }
