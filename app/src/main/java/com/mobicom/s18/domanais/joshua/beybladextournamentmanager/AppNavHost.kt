@@ -1,9 +1,8 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.compose.*
 import androidx.navigation.NavType
-import androidx.navigation.navArgument
+import androidx.navigation.compose.*
 
 @Composable
 fun AppNavHost(){
@@ -114,27 +113,93 @@ fun AppNavHost(){
                 tournamentId = tournamentId,
                 onBackClick = { navController.popBackStack() },
                 onViewMatchClick = { match ->
-                    navController.navigate("View Match")
+                    // Navigate to match details with proper parameters
+                    navController.navigate("match_details/${match.tournamentId}/${match.matchId}")
                 }
             )
-
         }
 
+        /**
+         * Match Details Screen Route
+         *
+         * Displays detailed information about a specific match with real-time Firestore updates.
+         * Integrated with MatchDetailsViewModel for state management.
+         *
+         * Route: match_details/{tournamentId}/{matchId}
+         * Parameters:
+         *   - tournamentId: ID of the tournament
+         *   - matchId: ID of the specific match
+         *
+         * Features:
+         *   - Real-time score updates from Firestore
+         *   - Player details and statistics
+         *   - Match timer with start/stop controls
+         *   - Navigation to match recording
+         *   - Navigation to final round build submission
+         *
+         * Note: SimpleMatchDetailsScreen.kt has been DELETED.
+         * This route now uses the original MatchDetailsScreen.kt with full backend integration.
+         */
+        composable(
+            route = "match_details/{tournamentId}/{matchId}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("matchId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
 
-        composable("View Match"){
             MatchDetailsScreen(
+                tournamentId = tournamentId,
+                matchId = matchId,
                 onBackClick = { navController.popBackStack() },
                 onRecord = {
-                    navController.navigate("Record Match")
+                    // Navigate to match recording screen
+                    navController.navigate("match_recording/$tournamentId/$matchId")
                 },
-                onBuildSubmit = {navController.navigate("BuildSubmit")}
+                onBuildSubmit = { playerId, playerName ->
+                    // Navigate to build submission with player info
+                    navController.navigate("BuildSubmit/$tournamentId/$playerId/$playerName")
+                }
             )
         }
 
-        composable("BuildSubmit"){
+        composable(
+            route = "match_recording/{tournamentId}/{matchId}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("matchId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+            MatchRecordingScreen(
+                tournamentId = tournamentId,
+                matchId = matchId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "BuildSubmit/{tournamentId}/{playerId}/{playerName}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("playerId") { type = NavType.StringType },
+                navArgument("playerName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val playerId = backStackEntry.arguments?.getString("playerId") ?: ""
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+
             FinalRoundBuildSubmissionScreen(
-                onBackClick = {navController.popBackStack()},
-                onSubmitClick = {navController.popBackStack()}
+                tournamentId = tournamentId,
+                playerId = playerId,
+                playerName = playerName,
+                onBackClick = { navController.popBackStack() },
+                onSubmitSuccess = { navController.popBackStack() }
             )
         }
 
@@ -173,12 +238,6 @@ fun AppNavHost(){
         composable ("notifs"){
             NotificationsScreen(
                 onBackClick = {navController.popBackStack()}
-            )
-        }
-
-        composable ("Record Match"){
-            MatchRecordingScreen(
-                onBackClick = { navController.popBackStack() }
             )
         }
 
