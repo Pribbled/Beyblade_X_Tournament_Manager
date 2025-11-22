@@ -3,7 +3,6 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
-import androidx.navigation.navArgument
 
 @Composable
 fun AppNavHost(){
@@ -72,8 +71,8 @@ fun AppNavHost(){
                 onProfileClick = {
                     navController.navigate("profile")
                 },
-                onTournamentClick = {
-                    navController.navigate("tournament")
+                onTournamentClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId")
                 },
                 onJoinTournamentClick = {
                     navController.navigate("joinTournament")
@@ -87,20 +86,31 @@ fun AppNavHost(){
         composable("joinTournament") {
             JoinTournamentScreen(
                 onBackClick = { navController.popBackStack()},
-                onJoinAsJudgeClick = {navController.navigate("tournament")},
-                onJoinAsPlayerClick = {navController.navigate("tournament")}
+                onJoinAsJudgeClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId")
+                },
+                onJoinAsPlayerClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId")
+                }
             )
         }
 
         composable ("createTournament") {
             CreateTournamentScreen(
                 onBackClick = { navController.popBackStack()},
-                onCreateTournamentClick = {navController.navigate("tournament")}
+                onCreateTournamentClick = { tournamentId: String ->
+                    navController.navigate("tournament/$tournamentId")
+                }
             )
         }
 
-        composable ("tournament") {
-            TournamentDashboardScreen (
+        composable(
+            route = "tournament/{tournamentId}",
+            arguments = listOf(navArgument("tournamentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            TournamentDashboardScreen(
+                tournamentId = tournamentId,
                 onBackClick = { navController.popBackStack() },
                 onViewMatchClick = { match ->
                     // Navigate to match details with proper parameters

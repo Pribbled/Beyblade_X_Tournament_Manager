@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
@@ -19,12 +20,12 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.Tour
 
 // Dummy data for participants
 data class Player(val name: String, val rank: Int)
+
 val dummyParticipants = listOf(
     Player("Blader_ACE", 1), Player("SpeedKing", 2), Player("DraconicFury", 3),
     Player("VortexMaster", 4), Player("IronGrip", 5), Player("ShadowBlade", 6),
     Player("X-Treme", 7), Player("Leo a.k.a. Lion", 8)
 )
-
 
 @Composable
 fun OverviewTab(
@@ -51,10 +52,10 @@ fun OverviewTab(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Tournament Details", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Date: ${tournament.date}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Date: ${tournament.startDate}", style = MaterialTheme.typography.bodyMedium)
                     Text("Status: ${tournament.status}", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Participants: ${tournament.participants}",
+                        "Participants: ${tournament.tournamentPlayers.size}",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -92,11 +93,18 @@ fun ParticipantRow(player: Player) {
     }
 }
 
-
 @Preview(showBackground = true)
 @Composable
 fun OverviewTabPreview() {
     BeybladeXTournamentManagerTheme {
-        OverviewTab(tournament = dummyTournaments.first())
+        OverviewTab(
+            tournament = Tournament(
+                uid = "preview1",
+                name = "Preview Tournament",
+                startDate = "Oct 25, 2025",
+                status = "upcoming",
+                tournamentPlayers = dummyParticipants.map { "" }
+            )
+        )
     }
 }
