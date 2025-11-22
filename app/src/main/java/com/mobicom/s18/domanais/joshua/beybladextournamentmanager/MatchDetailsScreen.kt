@@ -1,6 +1,7 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,7 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +42,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.RoundDetail
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchDetailsViewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchUiState
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 @Composable
@@ -130,113 +139,36 @@ fun RoundDetail(
 
     }
 }
-@Composable
-fun MatchDetailsComponent(
-    onUpdateScore: () -> Unit = {},
-    onRecord: () -> Unit = {}
-) {
-    var elapsed by remember { mutableLongStateOf(0L) } // seconds
-    var running by remember { mutableStateOf(false) }
-
-    LaunchedEffect(running) {
-        if (running) {
-            while (running) {
-                delay(1000L)
-                elapsed += 1L
-            }
-        }
-    }
-
-    fun formatTime(totalSeconds: Long): String {
-        val minutes = TimeUnit.SECONDS.toMinutes(totalSeconds)
-        val seconds = totalSeconds - TimeUnit.MINUTES.toSeconds(minutes)
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Timer",
-            fontWeight = FontWeight.Bold,
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = formatTime(elapsed),
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 36.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Button(
-                onClick = { running = true },
-                modifier = Modifier
-                    .width(140.dp)
-                    .height(44.dp)
-            ) {
-                Text("Start")
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Button(
-                onClick = { running = false },
-                modifier = Modifier
-                    .width(140.dp)
-                    .height(44.dp)
-            ) {
-                Text("Stop")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            OutlinedButton(
-                onClick = { onRecord() },
-                modifier = Modifier
-                    .width(160.dp)
-                    .height(44.dp)
-            ) {
-                Text("Record Match")
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            OutlinedButton(
-                onClick = { onUpdateScore() },
-                modifier = Modifier
-                    .width(160.dp)
-                    .height(44.dp)
-            ) {
-                Text("Update Score")
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchDetailsScreen(
+    tournamentId: String,
+    matchId: String,
     onBackClick: () -> Unit = {},
-    onRecord: () -> Unit
+    onRecord: () -> Unit,
+    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
+    viewModel: MatchDetailsViewModel = viewModel()
 ) {
+    // Collect UI state from ViewModel
+    val matchState by viewModel.matchState.collectAsState()
+    val elapsedTime by viewModel.elapsedTime.collectAsState()
+    val isTimerRunning by viewModel.isTimerRunning.collectAsState()
+
+    // Listen to real-time match updates
+    LaunchedEffect(tournamentId, matchId) {
+        viewModel.listenToMatch(tournamentId, matchId)
+    }
+
+    // Timer effect
+    LaunchedEffect(isTimerRunning) {
+        if (isTimerRunning) {
+            while (isTimerRunning) {
+                delay(1000L)
+                viewModel.updateElapsedTime(elapsedTime + 1, tournamentId, matchId)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -263,89 +195,246 @@ fun MatchDetailsScreen(
             )
         }
     ) { paddingValues ->
-        androidx.compose.foundation.lazy.LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-            item {
+
+        when (val state = matchState) {
+            is MatchUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            is MatchUiState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Error loading match",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            is MatchUiState.Success -> {
+                MatchDetailsContent(
+                    match = state.match,
+                    elapsedTime = elapsedTime,
+                    isTimerRunning = isTimerRunning,
+                    onStartTimer = { viewModel.startTimer() },
+                    onStopTimer = { viewModel.stopTimer() },
+                    onRecord = onRecord,
+                    onBuildSubmit = onBuildSubmit,
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MatchDetailsContent(
+    match: Match,
+    elapsedTime: Long,
+    isTimerRunning: Boolean,
+    onStartTimer: () -> Unit,
+    onStopTimer: () -> Unit,
+    onRecord: () -> Unit,
+    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    fun formatTime(totalSeconds: Long): String {
+        val minutes = TimeUnit.SECONDS.toMinutes(totalSeconds)
+        val seconds = totalSeconds - TimeUnit.MINUTES.toSeconds(minutes)
+        return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top
+    ) {
+        item {
+            Text(
+                text = "${match.round}: Match ${match.matchNumber}",
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 36.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        item {
+            Text(
+                text = "Format: ${match.format}",
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                color = Color.Gray
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+
+        item {
+            Text(
+                text = "Round: ${match.currentRound}",
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 18.sp,
+                color = Color.White
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PlayerDetailsColumn(
+                    playerName = match.player1Name,
+                    playerScore = match.player1Score,
+                    playerWins = match.player1Wins,
+                    playerLosses = match.player1Losses,
+                    modifier = Modifier
+                )
+
+                PlayerDetailsColumn(
+                    playerName = match.player2Name,
+                    playerScore = match.player2Score,
+                    playerWins = match.player2Wins,
+                    playerLosses = match.player2Losses,
+                    modifier = Modifier
+                )
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        // Timer and action buttons
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "Qualifier: Match 1",
-                    fontFamily = FontFamily.SansSerif,
+                    text = "Timer",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = formatTime(elapsedTime),
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 36.sp,
                     color = MaterialTheme.colorScheme.primary
                 )
-            }
 
-            item {
-                Text(
-                    text = "Format: First to Four",
-                    fontFamily = FontFamily.SansSerif,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp,
-                    color = Color.Gray
-                )
-            }
+                Spacer(modifier = Modifier.height(12.dp))
 
-            item { Spacer(modifier = Modifier.height(24.dp)) }
-
-            item {
-                Text(
-                    text = "Round : 4!",
-                    fontFamily = FontFamily.SansSerif,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp,
-                    color = Color.White
-                )
-            }
-
-            item {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    PlayerDetailsColumn(
-                        playerName = "Blader_ACE",
-                        playerScore = 3,
-                        playerWins = 2,
-                        playerLosses = 1,
+                    Button(
+                        onClick = onStartTimer,
+                        enabled = !isTimerRunning,
                         modifier = Modifier
-                    )
+                            .width(140.dp)
+                            .height(44.dp)
+                    ) {
+                        Text("Start")
+                    }
 
-                    PlayerDetailsColumn(
-                        playerName = "X-Treme",
-                        playerScore = 1,
-                        playerWins = 1,
-                        playerLosses = 2,
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Button(
+                        onClick = onStopTimer,
+                        enabled = isTimerRunning,
                         modifier = Modifier
-                    )
+                            .width(140.dp)
+                            .height(44.dp)
+                    ) {
+                        Text("Stop")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    OutlinedButton(
+                        onClick = onRecord,
+                        modifier = Modifier
+                            .width(200.dp)
+                            .height(48.dp)
+                    ) {
+                        Text("Record Match", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            // For now, submit build for player 1
+                            // TODO: Add UI to select which player's build to submit
+                            onBuildSubmit(match.player1Id, match.player1Name)
+                        },
+                        modifier = Modifier
+                            .width(190.dp)
+                            .height(44.dp)
+                    ) {
+                        Text("Submit Final Build")
+                    }
                 }
             }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
-
-            item {
-                MatchDetailsComponent(
-                    onUpdateScore = {},
-                    onRecord = onRecord
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
-
-            item { RoundDetail(1, "Blader_ACE","Video_Link_1") }
-            item { RoundDetail(2, "X-Treme","Video_Link_2") }
-            item { RoundDetail(3, "Blader_ACE","Video_Link_3") }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
+
+        item { Spacer(modifier = Modifier.height(12.dp)) }
+
+        // Display round history
+        items(match.rounds.size) { index ->
+            val round = match.rounds[index]
+            RoundDetail(
+                roundNumber = round.roundNumber,
+                winnerName = round.winnerName,
+                videoLink = round.videoLink
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 }
 
@@ -353,5 +442,41 @@ fun MatchDetailsScreen(
 @Preview
 @Composable
 fun MatchDetailsScreenPreview() {
-    MatchDetailsScreen(onRecord = {})
+    // Preview with sample data
+    val sampleMatch = Match(
+        matchId = "match1",
+        tournamentId = "tournament1",
+        matchNumber = 1,
+        round = "Qualifier",
+        format = "First to Four",
+        player1Id = "player1",
+        player1Name = "Blader_ACE",
+        player1Score = 3,
+        player1Wins = 2,
+        player1Losses = 1,
+        player2Id = "player2",
+        player2Name = "X-Treme",
+        player2Score = 1,
+        player2Wins = 1,
+        player2Losses = 2,
+        status = "in_progress",
+        currentRound = 4,
+        rounds = listOf(
+            RoundDetail(1, "player1", "Blader_ACE", "Video_Link_1"),
+            RoundDetail(2, "player2", "X-Treme", "Video_Link_2"),
+            RoundDetail(3, "player1", "Blader_ACE", "Video_Link_3")
+        )
+    )
+
+    MatchDetailsContent(
+        match = sampleMatch,
+        elapsedTime = 180L,
+        isTimerRunning = false,
+        onStartTimer = {},
+        onStopTimer = {},
+        onRecord = {},
+        onBuildSubmit = { _, _ -> }
+    )
 }
+
+
