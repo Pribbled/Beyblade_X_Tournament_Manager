@@ -146,7 +146,7 @@ fun MatchDetailsScreen(
     matchId: String,
     onBackClick: () -> Unit = {},
     onRecord: () -> Unit,
-    onBuildSubmit: () -> Unit,
+    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
     viewModel: MatchDetailsViewModel = viewModel()
 ) {
     // Collect UI state from ViewModel
@@ -255,7 +255,7 @@ fun MatchDetailsContent(
     onStartTimer: () -> Unit,
     onStopTimer: () -> Unit,
     onRecord: () -> Unit,
-    onBuildSubmit: () -> Unit,
+    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     fun formatTime(totalSeconds: Long): String {
@@ -407,7 +407,11 @@ fun MatchDetailsContent(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     OutlinedButton(
-                        onClick = onBuildSubmit,
+                        onClick = {
+                            // For now, submit build for player 1
+                            // TODO: Add UI to select which player's build to submit
+                            onBuildSubmit(match.player1Id, match.player1Name)
+                        },
                         modifier = Modifier
                             .width(190.dp)
                             .height(44.dp)
@@ -471,7 +475,7 @@ fun MatchDetailsScreenPreview() {
         onStartTimer = {},
         onStopTimer = {},
         onRecord = {},
-        onBuildSubmit = {}
+        onBuildSubmit = { _, _ -> }
     )
 }
 

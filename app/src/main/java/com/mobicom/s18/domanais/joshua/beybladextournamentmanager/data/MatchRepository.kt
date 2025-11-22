@@ -17,6 +17,7 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
     companion object {
         private const val TOURNAMENTS_COLLECTION = "tournaments"
         private const val MATCHES_COLLECTION = "matches"
+        private const val FINAL_BUILDS_COLLECTION = "final_builds"
     }
 
     /**
@@ -627,6 +628,280 @@ class MatchRepository(private val db: FirebaseFirestore = FirebaseModule.db) {
             batch.commit().await()
 
             Result.success(matches.size)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ========== FINAL ROUND BUILD SUBMISSION ==========
+
+    /**
+     * Submit a Beyblade build for the final round.
+     * Creates or updates a build document in the final_builds subcollection.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param playerId The ID of the player
+     * @param playerName The name of the player
+     * @param layer The Layer component of the Beyblade
+     * @param disc The Disc component of the Beyblade
+     * @param bit The Bit component of the Beyblade
+     * @param submittedBy The ID of the judge/host submitting the build
+     * @return Result containing the buildId on success, or an error
+     */
+    suspend fun submitFinalBuild(
+        tournamentId: String,
+        playerId: String,
+        playerName: String,
+        layer: String,
+        disc: String,
+        bit: String,
+        submittedBy: String
+    ): Result<String> {
+        return try {
+            // Validate inputs
+            if (layer.isBlank() || disc.isBlank() || bit.isBlank()) {
+                return Result.failure(IllegalArgumentException("All Beyblade parts (Layer, Disc, Bit) must be specified"))
+            }
+
+            // Generate build ID based on player and tournament
+            val buildId = "build_${tournamentId}_${playerId}"
+
+            val buildRef = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .document(buildId)
+
+            // Check if build already exists to determine if this is an update
+            val existingBuild = buildRef.get().await()
+            val isUpdate = existingBuild.exists()
+
+            val build = BeybladeBuild(
+                buildId = buildId,
+                tournamentId = tournamentId,
+                playerId = playerId,
+                playerName = playerName,
+                layer = layer,
+                disc = disc,
+                bit = bit,
+                submittedBy = submittedBy,
+                submittedAt = if (isUpdate) {
+                    existingBuild.toObject(BeybladeBuild::class.java)?.submittedAt ?: com.google.firebase.Timestamp.now()
+                } else {
+                    com.google.firebase.Timestamp.now()
+                },
+                updatedAt = com.google.firebase.Timestamp.now()
+            )
+
+            // Save to Firestore
+            buildRef.set(build).await()
+
+            Result.success(buildId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get a specific player's final build (one-time read).
+     *
+     * @param tournamentId The ID of the tournament
+     * @param playerId The ID of the player
+     * @return Result containing the BeybladeBuild or null if not found
+     */
+    suspend fun getFinalBuild(tournamentId: String, playerId: String): Result<BeybladeBuild?> {
+        return try {
+            val buildId = "build_${tournamentId}_${playerId}"
+
+            val document = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .document(buildId)
+                .get()
+                .await()
+
+            val build = document.toObject(BeybladeBuild::class.java)
+            Result.success(build)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get all final builds for a tournament (one-time read).
+     *
+     * @param tournamentId The ID of the tournament
+     * @return Result containing a list of all BeybladeBuild objects
+     */
+    suspend fun getAllFinalBuilds(tournamentId: String): Result<List<BeybladeBuild>> {
+        return try {
+            val querySnapshot = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .get()
+                .await()
+
+            val builds = querySnapshot.documents.mapNotNull {
+                it.toObject(BeybladeBuild::class.java)
+            }.sortedBy { it.playerName }
+
+            Result.success(builds)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Listen for real-time updates to all final builds in a tournament.
+     * Returns a Flow that emits the updated list whenever any build changes.
+     *
+     * @param tournamentId The ID of the tournament
+     * @return Flow emitting lists of BeybladeBuild objects on every update
+     */
+    fun listenToFinalBuilds(tournamentId: String): Flow<List<BeybladeBuild>> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+
+        try {
+            listenerRegistration = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        println("Error listening to final builds: ${error.message}")
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+                        val builds = snapshot.documents
+                            .mapNotNull { it.toObject(BeybladeBuild::class.java) }
+                            .sortedBy { it.playerName }
+
+                        trySend(builds)
+                    } else {
+                        trySend(emptyList())
+                    }
+                }
+
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        } catch (e: Exception) {
+            trySend(emptyList())
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        }
+    }
+
+    /**
+     * Listen for real-time updates to a specific player's final build.
+     * Returns a Flow that emits the BeybladeBuild whenever it changes.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param playerId The ID of the player
+     * @return Flow emitting BeybladeBuild objects on every update, or null if not found
+     */
+    fun listenToPlayerFinalBuild(tournamentId: String, playerId: String): Flow<BeybladeBuild?> = callbackFlow {
+        var listenerRegistration: ListenerRegistration? = null
+
+        try {
+            val buildId = "build_${tournamentId}_${playerId}"
+
+            listenerRegistration = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .document(buildId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        println("Error listening to player build: ${error.message}")
+                        trySend(null)
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null && snapshot.exists()) {
+                        val build = snapshot.toObject(BeybladeBuild::class.java)
+                        trySend(build)
+                    } else {
+                        trySend(null)
+                    }
+                }
+
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        } catch (e: Exception) {
+            trySend(null)
+            awaitClose {
+                listenerRegistration?.remove()
+            }
+        }
+    }
+
+    /**
+     * Update an existing final build.
+     * Note: You can also use submitFinalBuild() which handles both create and update.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param playerId The ID of the player
+     * @param layer The new Layer component (optional)
+     * @param disc The new Disc component (optional)
+     * @param bit The new Bit component (optional)
+     * @return Result indicating success or failure
+     */
+    suspend fun updateFinalBuild(
+        tournamentId: String,
+        playerId: String,
+        layer: String? = null,
+        disc: String? = null,
+        bit: String? = null
+    ): Result<Unit> {
+        return try {
+            val buildId = "build_${tournamentId}_${playerId}"
+
+            val updates = mutableMapOf<String, Any>(
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+
+            layer?.let { updates["layer"] = it }
+            disc?.let { updates["disc"] = it }
+            bit?.let { updates["bit"] = it }
+
+            if (updates.size == 1) {
+                return Result.failure(IllegalArgumentException("No updates provided"))
+            }
+
+            db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .document(buildId)
+                .update(updates)
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Delete a player's final build.
+     *
+     * @param tournamentId The ID of the tournament
+     * @param playerId The ID of the player
+     * @return Result indicating success or failure
+     */
+    suspend fun deleteFinalBuild(tournamentId: String, playerId: String): Result<Unit> {
+        return try {
+            val buildId = "build_${tournamentId}_${playerId}"
+
+            db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournamentId)
+                .collection(FINAL_BUILDS_COLLECTION)
+                .document(buildId)
+                .delete()
+                .await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

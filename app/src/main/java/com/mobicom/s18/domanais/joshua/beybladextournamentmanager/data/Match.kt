@@ -56,3 +56,24 @@ data class RoundDetail(
     val timestamp: Timestamp = Timestamp.now()
 )
 
+/**
+ * Data class representing a Beyblade build for the final round.
+ * Stored in Firestore under: tournaments/{tournamentId}/final_builds/{buildId}
+ */
+data class BeybladeBuild(
+    val buildId: String = "",
+    val tournamentId: String = "",
+    val playerId: String = "",
+    val playerName: String = "",
+
+    // Beyblade parts
+    val layer: String = "",
+    val disc: String = "",
+    val bit: String = "",
+
+    // Metadata
+    val submittedBy: String = "", // Judge/Host who submitted the build
+    val submittedAt: Timestamp = Timestamp.now(),
+    val updatedAt: Timestamp = Timestamp.now()
+)
+

@@ -148,7 +148,10 @@ fun AppNavHost(){
                     // Navigate to match recording screen
                     navController.navigate("match_recording/$tournamentId/$matchId")
                 },
-                onBuildSubmit = { navController.navigate("BuildSubmit") }
+                onBuildSubmit = { playerId, playerName ->
+                    // Navigate to build submission with player info
+                    navController.navigate("BuildSubmit/$tournamentId/$playerId/$playerName")
+                }
             )
         }
 
@@ -169,10 +172,24 @@ fun AppNavHost(){
             )
         }
 
-        composable("BuildSubmit"){
+        composable(
+            route = "BuildSubmit/{tournamentId}/{playerId}/{playerName}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("playerId") { type = NavType.StringType },
+                navArgument("playerName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val playerId = backStackEntry.arguments?.getString("playerId") ?: ""
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+
             FinalRoundBuildSubmissionScreen(
-                onBackClick = {navController.popBackStack()},
-                onSubmitClick = {navController.popBackStack()}
+                tournamentId = tournamentId,
+                playerId = playerId,
+                playerName = playerName,
+                onBackClick = { navController.popBackStack() },
+                onSubmitSuccess = { navController.popBackStack() }
             )
         }
 
