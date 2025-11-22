@@ -9,12 +9,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.dummyTournaments
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.BracketTestingPanel
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.TournamentDashboardViewModel
 
 
 // Dummy data for participants
@@ -27,22 +24,11 @@ val dummyParticipants = listOf(
 
 
 @Composable
-fun OverviewTab(
-    tournament: Tournament,
-    viewModel: TournamentDashboardViewModel = viewModel()
-) {
+fun OverviewTab(tournament: Tournament) {
     LazyColumn(
         modifier = Modifier.padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Bracket Testing Panel - For Testing/Development
-        item {
-            BracketTestingPanel(
-                tournamentId = tournament.id,
-                viewModel = viewModel
-            )
-        }
-
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
