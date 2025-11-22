@@ -12,7 +12,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
@@ -22,10 +21,14 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentDashboardScreen(
-    tournament: Tournament = dummyTournaments.first(), // Use a dummy tournament for preview
+    tournamentId: String = "preview1",
     onBackClick: () -> Unit = {} ,
-    onViewMatchClick: (Match) -> Unit = {}
+    onViewMatchClick: (Match) -> Unit = {},
+    viewModel: TournamentDashboardViewModel = viewModel()
 ) {
+    val db = FirebaseFirestore.getInstance()
+    var tournament by remember { mutableStateOf<Tournament?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
 
@@ -34,7 +37,7 @@ fun TournamentDashboardScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = tournament.name,
+                        text = tournament!!.name,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.Tournament
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 @Composable
@@ -45,12 +45,12 @@ fun TournamentCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = tournament.date,
+                    text = tournament.startDate,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
                 Text(
-                    text = "${tournament.participants} participants",
+                    text = "${tournament.tournamentPlayers.size} participants",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -60,9 +60,9 @@ fun TournamentCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = when (tournament.status) {
-                    "Ongoing" -> MaterialTheme.colorScheme.primary
-                    "Upcoming" -> MaterialTheme.colorScheme.secondary
-                    "Finished" -> Color.Gray
+                    "ongoing" -> MaterialTheme.colorScheme.primary
+                    "upcoming" -> MaterialTheme.colorScheme.secondary
+                    "finished" -> Color.Gray
                     else -> MaterialTheme.colorScheme.onSurface
                 }
             )
@@ -75,7 +75,13 @@ fun TournamentCard(
 fun TournamentCardPreview() {
     BeybladeXTournamentManagerTheme {
         TournamentCard(
-            tournament = Tournament("p1", "Preview Tournament", "Oct 25, 2025", "Ongoing", 16),
+            tournament = Tournament(
+                uid = "p1",
+                name = "Preview Tournament",
+                startDate = "Oct 25, 2025",
+                status = "upcoming",
+                tournamentPlayers = List(16) { "" }
+            ),
             onClick = {}
         )
     }

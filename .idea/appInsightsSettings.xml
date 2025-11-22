@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.mobicom.s18.domanais.joshua.beybladextournamentmanager" />
+                  <option name="mobileSdkAppId" value="1:710775888584:android:d196cb090fbe26e7ee63fd" />
+                  <option name="projectId" value="beyblade-x-manager-dc424" />
+                  <option name="projectNumber" value="710775888584" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
