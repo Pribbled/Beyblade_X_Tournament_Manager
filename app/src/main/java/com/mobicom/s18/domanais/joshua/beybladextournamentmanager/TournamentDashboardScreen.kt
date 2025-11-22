@@ -17,12 +17,19 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTa
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentDashboardScreen(
-    tournament: Tournament = dummyTournaments.first(), // Use a dummy tournament for preview
+    tournament: Tournament = Tournament(
+        uid = "preview1",
+        name = "Preview Tournament",
+        startDate = "Oct 25, 2025",
+        status = "upcoming",
+        tournamentPlayers = emptyList()
+    ), // Use a dummy tournament for preview
     onBackClick: () -> Unit = {} ,
     onViewMatchClick: (Match) -> Unit = {}
 ) {

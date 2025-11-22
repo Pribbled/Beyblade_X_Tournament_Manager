@@ -182,6 +182,10 @@ fun JoinTournamentScreen(
                                         tournamentRef.update(
                                             "tournamentPlayers", FieldValue.arrayUnion(auth.currentUser!!.uid)
                                         ).await()
+                                        db.collection("users")
+                                            .document(auth.currentUser!!.uid)
+                                            .update("pastTournaments", FieldValue.arrayUnion(doc.id))
+                                            .await()
                                         Toast.makeText(
                                             context,
                                             "Successfully joined!",
@@ -226,9 +230,36 @@ fun JoinTournamentScreen(
                                     val doc = result.documents.first()
                                     val tournamentRef = doc.reference
 
-                                    tournamentRef.update(
-                                        "tournamentJudges", FieldValue.arrayUnion(auth.currentUser!!.uid)
-                                    ).await()
+
+                                    val tournament = doc.toObject(Tournament::class.java)
+
+
+                                    val players = tournament?.tournamentPlayers
+
+
+                                    if (players?.contains(auth.currentUser!!.uid) == true) {
+                                        Toast.makeText(
+                                            context,
+                                            "You have already joined this tournament.",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    else{
+                                        tournamentRef.update(
+                                            "tournamentJudges", FieldValue.arrayUnion(auth.currentUser!!.uid)
+                                        ).await()
+                                        db.collection("users")
+                                            .document(auth.currentUser!!.uid)
+                                            .update("pastTournaments", FieldValue.arrayUnion(doc.id))
+                                            .await()
+                                        Toast.makeText(
+                                            context,
+                                            "Successfully joined!",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+
+
                                 }
                             }catch (e: Exception){
                                 Log.w("JoinTournament", "Error Joining tournament as Judge", e)

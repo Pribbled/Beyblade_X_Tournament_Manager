@@ -15,10 +15,11 @@ import androidx.compose.ui.unit.dp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import kotlinx.coroutines.launch
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.tasks.await
-import kotlin.text.set
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +31,10 @@ fun CreateTournamentScreen(
     var tournamentFormat by remember { mutableStateOf("") }
     var scoringSystem by remember { mutableStateOf("") }
     var tieBreakRules by remember { mutableStateOf("") }
+    //dates
+    var tournamentStartDate by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
 
     // Dropdown options and selections
     val formatOptions = listOf("Single Elimination", "Double Elimination", "Round Robin", "Swiss System")
@@ -39,6 +44,8 @@ fun CreateTournamentScreen(
     val scoringOptions = listOf("Standard (1-2-3)", "Custom", "Win-Loss Only")
     var expandedScoringDropdown by remember { mutableStateOf(false) }
     var selectedScoringOption by remember { mutableStateOf(scoringOptions[0]) }
+
+
 
     // Toggle states
     var allowSelfRegistration by remember { mutableStateOf(true) }
@@ -160,6 +167,47 @@ fun CreateTournamentScreen(
                 }
             }
 
+            // Tournament Start Date
+            Button(
+                onClick = { showDatePicker = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    tournamentStartDate ?: "Select Tournament Start Date"
+                )
+            }
+
+            if (showDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = if (tournamentStartDate != null) {
+                        java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+                            .parse(tournamentStartDate!!)?.time ?: System.currentTimeMillis()
+                    } else {
+                        System.currentTimeMillis()
+                    }
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        Button(onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                tournamentStartDate = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US).format(millis)
+                            }
+                            showDatePicker = false
+                        }) {
+                            Text("OK")
+                        }
+                    },
+                    dismissButton = {
+                        Button(onClick = { showDatePicker = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
             // Tie Break Rules
             OutlinedTextField(
                 value = tieBreakRules,
@@ -270,6 +318,11 @@ fun CreateTournamentScreen(
                             isLoading = false
                             return@launch
                         }
+                        if(tournamentStartDate.isNullOrBlank()){
+                            errorMessage = "Please select a start date for the tournament."
+                            isLoading = false
+                            return@launch
+                        }
                         val tournament = Tournament(
                             uid = "", // Firebase will generate this
                             tournamentOwner =  auth.currentUser?.uid ?: "",
@@ -278,7 +331,9 @@ fun CreateTournamentScreen(
                             scoringSystem = selectedScoringOption,
                             tieBreakRules = tieBreakRules,
                             allowSelfRegister = allowSelfRegistration,
-                            publicVisibility = publicVisibility
+                            publicVisibility = publicVisibility,
+                            startDate = tournamentStartDate ?: ""
+
                         )
                         try {
                             val currentUser = auth.currentUser
@@ -301,6 +356,10 @@ fun CreateTournamentScreen(
                                     Log.w("CreateTournament", "Error creating tournament", e)
                                     errorMessage = "${e.message}"
                                 }
+                                .await()
+                            db.collection("users")
+                                .document(auth.currentUser?.uid ?: "")
+                                .update("pastTournaments", com.google.firebase.firestore.FieldValue.arrayUnion(documentRef.id))
                                 .await()
 
 
