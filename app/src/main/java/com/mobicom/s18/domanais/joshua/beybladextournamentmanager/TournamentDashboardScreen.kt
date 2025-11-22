@@ -29,7 +29,7 @@ fun TournamentDashboardScreen(
         startDate = "Oct 25, 2025",
         status = "upcoming",
         tournamentPlayers = emptyList()
-    ), // Use a dummy tournament for preview
+    ),
     onBackClick: () -> Unit = {} ,
     onViewMatchClick: (Match) -> Unit = {}
 ) {
