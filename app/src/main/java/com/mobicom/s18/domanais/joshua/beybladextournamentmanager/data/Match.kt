@@ -10,8 +10,8 @@ data class Match(
     val matchId: String = "",
     val tournamentId: String = "",
     val matchNumber: Int = 0,
-    val round: String = "", // e.g., "Qualifier", "Semi-Finals", "Finals"
-    val format: String = "", // e.g., "First to Four", "Best of 5"
+    val round: String = "",
+    val format: String = "",
 
     // Players
     val player1Id: String = "",
@@ -27,7 +27,7 @@ data class Match(
     val player2Losses: Int = 0,
 
     // Match state
-    val status: String = "scheduled", // "scheduled", "in_progress", "completed"
+    val status: String = "scheduled",
     val currentRound: Int = 1,
     val winnerId: String? = null,
     val winnerName: String? = null,
@@ -41,11 +41,17 @@ data class Match(
     val rounds: List<RoundDetail> = emptyList(),
 
     // Media
-    val videoUrl: String? = null, // Download URL of the uploaded match video
+    val videoUrl: String? = null,
 
     // Metadata
     val createdAt: Timestamp = Timestamp.now(),
-    val updatedAt: Timestamp = Timestamp.now()
+    val updatedAt: Timestamp = Timestamp.now(),
+
+    // Metrics
+    val extremeFinishes: Int = 0,
+    val burstFinishes: Int = 0,
+    val overFinishes: Int = 0,
+    val spinFinishes: Int = 0
 )
 
 /**
@@ -75,8 +81,7 @@ data class BeybladeBuild(
     val bit: String = "",
 
     // Metadata
-    val submittedBy: String = "", // Judge/Host who submitted the build
+    val submittedBy: String = "",
     val submittedAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now()
 )
-

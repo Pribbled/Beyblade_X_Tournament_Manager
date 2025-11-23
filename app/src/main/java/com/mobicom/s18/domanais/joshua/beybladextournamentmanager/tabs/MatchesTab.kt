@@ -15,16 +15,12 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 
 /**
  * Composable that displays a list of matches for a tournament.
- * Shows upcoming matches (scheduled/in_progress) and completed matches separately.
- *
- * @param matches List of Match objects from Firestore
- * @param isLoading Whether the data is currently loading
- * @param onViewMatchClick Callback when a match is clicked
+ * * NOTE: This component is stateless. It relies on the parent screen (TournamentDashboard)
+ * to fetch the data via the Repository/ViewModel and pass the list here.
  */
 @Composable
 fun MatchesTab(
-    matches: List<Match> = emptyList(),
-    isLoading: Boolean = false,
+    matches: List<Match>, // Accepts list directly from ViewModel
     onViewMatchClick: (Match) -> Unit = {}
 ) {
     // Separate matches by status
@@ -37,20 +33,8 @@ fun MatchesTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Show loading indicator
-        if (isLoading) {
-            item {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-        }
-
         // Show message if no matches exist
-        if (!isLoading && matches.isEmpty()) {
+        if (matches.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -109,12 +93,6 @@ fun MatchesTab(
     }
 }
 
-/**
- * Card component displaying a single match with player names, status, and scores.
- *
- * @param match The Match object from Firestore
- * @param onViewMatchClick Callback when the card or button is clicked
- */
 @Composable
 fun MatchCard(
     match: Match,
@@ -156,14 +134,9 @@ fun MatchCard(
                 // Player 1
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = match.player1Name,
+                        text = match.player1Name.ifBlank { "TBD" },
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "ID: ${match.player1Id}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -180,14 +153,9 @@ fun MatchCard(
                     horizontalAlignment = Alignment.End
                 ) {
                     Text(
-                        text = match.player2Name,
+                        text = match.player2Name.ifBlank { "TBD" },
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "ID: ${match.player2Id}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -244,7 +212,6 @@ fun MatchesTabPreview() {
     BeybladeXTournamentManagerTheme {
         MatchesTab(
             matches = emptyList(),
-            isLoading = false,
             onViewMatchClick = {}
         )
     }

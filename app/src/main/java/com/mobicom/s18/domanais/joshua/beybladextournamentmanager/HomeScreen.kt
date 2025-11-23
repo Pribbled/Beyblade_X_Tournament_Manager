@@ -1,72 +1,70 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.tasks.await
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import android.util.Log
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.google.firebase.firestore.FirebaseFirestore
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.cards.TournamentCard
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
-
-// Dummy data list
-
-
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-        onProfileClick: () -> Unit = {},
-        onCreateTournamentClick: () -> Unit = {},
-        onJoinTournamentClick: () -> Unit = {},
-        onTournamentClick: (String) -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onCreateTournamentClick: () -> Unit = {},
+    onJoinTournamentClick: () -> Unit = {},
+    onTournamentClick: (String) -> Unit = {}
 ) {
-    val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val pastTournaments = remember { mutableStateOf<List<Tournament>>(emptyList()) }
+    val auth = FirebaseModule.auth
+    val db = FirebaseModule.db
 
-    //basically a coroutine for our composable so that when we use this component this runs
+    var tournaments by remember { mutableStateOf<List<Tournament>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
-        try {
-            val currentUserId = auth.currentUser?.uid ?: return@LaunchedEffect
-            val userDoc = db.collection("users")
-                .document(auth.currentUser!!.uid)
-                .get()
-                .await()
+        val userId = auth.currentUser?.uid
+        if (userId == null) {
+            isLoading = false
+            return@LaunchedEffect
+        }
 
-            val pastTournamentIds = userDoc.get("pastTournaments") as? List<String> ?: emptyList()
-            val fetchedTournaments = mutableListOf<Tournament>()
-            val tournamentsCollection = db.collection("tournaments")
-            for (tournamentId in pastTournamentIds) {
-                val doc = tournamentsCollection.document(tournamentId).get().await()
-                val tournament = doc.toObject(Tournament::class.java)
-                if (tournament != null) fetchedTournaments.add(tournament)
+        val query = db.collection("tournaments")
+            .whereArrayContains("tournamentPlayers", userId)
+
+        val listener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("HomeScreen", "Listen failed", error)
+                errorMessage = "Error loading tournaments: ${error.message}"
+                isLoading = false
+                return@addSnapshotListener
             }
 
-            pastTournaments.value = fetchedTournaments
+            if (snapshot != null) {
+                val fetchedList = snapshot.toObjects(Tournament::class.java)
 
-        } catch (e: Exception) {
-            Log.w("HomeScreen", "Error fetching tournaments", e)
+                tournaments = fetchedList.sortedWith(compareBy(
+                    { it.status == "completed" },
+                    { it.status == "upcoming" }
+                ))
+
+                isLoading = false
+            }
         }
     }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,14 +110,14 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("Create Tournament")
+                    Text("Create")
                 }
                 OutlinedButton(
                     onClick = onJoinTournamentClick,
                     modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("Join Tournament")
+                    Text("Join")
                 }
             }
 
@@ -130,18 +128,31 @@ fun HomeScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                items(pastTournaments.value) { tournament ->
-                    TournamentCard(
-                        tournament = tournament,
-                        onClick = { onTournamentClick(tournament.uid) }
-                    )
+            // Loading & Empty States
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (errorMessage != null) {
+                Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error)
+            } else if (tournaments.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Text("You haven't joined any tournaments yet.", color = Color.Gray)
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    items(tournaments) { tournament ->
+                        TournamentCard(
+                            tournament = tournament,
+                            // Use 'uid' as defined in your Tournament.kt data class
+                            onClick = { onTournamentClick(tournament.uid) }
+                        )
+                    }
                 }
             }
-
         }
     }
 }
@@ -153,4 +164,3 @@ fun HomeScreenPreview() {
         HomeScreen()
     }
 }
-

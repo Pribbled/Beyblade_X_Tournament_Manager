@@ -3,7 +3,6 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
@@ -24,7 +22,6 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTa
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.TournamentDashboardViewModel
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,21 +39,19 @@ fun TournamentDashboardScreen(
 
     LaunchedEffect(tournamentId) {
         if (tournamentId == "preview1") {
-            // Handle preview mode
             isLoading = false
             return@LaunchedEffect
         }
-
-        // Fetch real data
         db.collection("tournaments").document(tournamentId).get()
             .addOnSuccessListener { document ->
                 tournament = document.toObject(Tournament::class.java)
                 isLoading = false
             }
-            .addOnFailureListener {
-                isLoading = false
-            }
+            .addOnFailureListener { isLoading = false }
+        viewModel.loadMatches(tournamentId)
     }
+
+    val matches by viewModel.matches.collectAsState()
 
     Scaffold(
         topBar = {
@@ -70,10 +65,7 @@ fun TournamentDashboardScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -90,27 +82,22 @@ fun TournamentDashboardScreen(
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
                 tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
+                    Tab(selected = selectedTabIndex == index, onClick = { selectedTabIndex = index }, text = { Text(title) })
                 }
             }
+
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else if (tournament != null) {
-                // Only render content when tournament data exists
                 when (selectedTabIndex) {
                     0 -> OverviewTab(tournament!!)
-                    1 -> MatchesTab(onViewMatchClick = onViewMatchClick)
+                    1 -> MatchesTab(matches = matches, onViewMatchClick = onViewMatchClick)
                     2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                     3 -> MetricsTab()
                 }
             } else {
-                // Handle error case where tournament wasn't found
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Tournament not found")
                 }
@@ -118,20 +105,6 @@ fun TournamentDashboardScreen(
         }
     }
 }
-
-@Composable
-fun PlaceholderTabContent(screenName: String) {
-    // This is a placeholder for screens assigned to other group members.
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Text(text = "$screenName content will be displayed here.")
-        Text(text = "Assigned to another team member.")
-    }
-}
-
 
 @Preview(showBackground = true)
 @Composable
