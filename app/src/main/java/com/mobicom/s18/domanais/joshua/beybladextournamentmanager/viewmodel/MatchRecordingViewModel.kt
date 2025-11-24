@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.util.NotificationHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +53,7 @@ class MatchRecordingViewModel(
                         message = "Video uploaded successfully!",
                         downloadUrl = downloadUrl
                     )
+                    NotificationHelper.showUploadCompleteNotification(context, matchId)
                 },
                 onFailure = { exception ->
                     _uploadState.value = VideoUploadState.Error(

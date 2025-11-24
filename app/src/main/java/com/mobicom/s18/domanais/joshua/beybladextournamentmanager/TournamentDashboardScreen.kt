@@ -44,7 +44,11 @@ fun TournamentDashboardScreen(
         }
         db.collection("tournaments").document(tournamentId).get()
             .addOnSuccessListener { document ->
-                tournament = document.toObject(Tournament::class.java)
+                val fetchedTournament = document.toObject(Tournament::class.java)
+                tournament = fetchedTournament
+                if (fetchedTournament != null) {
+                    viewModel.loadParticipants(fetchedTournament.tournamentPlayers)
+                }
                 isLoading = false
             }
             .addOnFailureListener { isLoading = false }
@@ -52,6 +56,7 @@ fun TournamentDashboardScreen(
     }
 
     val matches by viewModel.matches.collectAsState()
+    val participants by viewModel.participants.collectAsState()
 
     Scaffold(
         topBar = {
@@ -92,7 +97,7 @@ fun TournamentDashboardScreen(
                 }
             } else if (tournament != null) {
                 when (selectedTabIndex) {
-                    0 -> OverviewTab(tournament!!)
+                    0 -> OverviewTab(tournament!!, participants)
                     1 -> MatchesTab(matches = matches, onViewMatchClick = onViewMatchClick)
                     2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                     3 -> MetricsTab()
