@@ -1,7 +1,9 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.tasks.Tasks
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
@@ -65,20 +67,31 @@ class TournamentDashboardViewModel(
 
         viewModelScope.launch {
             try {
+                Log.d("DashboardVM", "Fetching profiles for IDs: $playerIds")
                 val db = FirebaseModule.db
-                val profiles = mutableListOf<UserProfile>()
 
-                playerIds.forEach { uid ->
-                    val doc = db.collection("users").document(uid).get().await()
-                    val profile = doc.toObject(UserProfile::class.java)
-                    if (profile != null) {
-                        profiles.add(profile)
+                // Create a list of Task<DocumentSnapshot>
+                val tasks = playerIds.map { uid ->
+                    db.collection("users").document(uid).get()
+                }
+
+                // Wait for ALL tasks to complete in parallel
+                val snapshots = Tasks.whenAllSuccess<com.google.firebase.firestore.DocumentSnapshot>(tasks).await()
+
+                // Convert snapshots to UserProfile objects
+                val profiles = snapshots.mapNotNull { doc ->
+                    try {
+                        doc.toObject(UserProfile::class.java)
+                    } catch (e: Exception) {
+                        Log.e("DashboardVM", "Error parsing profile for ${doc.id}", e)
+                        null
                     }
                 }
 
+                Log.d("DashboardVM", "Successfully loaded ${profiles.size} profiles")
                 _participants.value = profiles
             } catch (e: Exception) {
-                println("Error fetching participants: ${e.message}")
+                Log.e("DashboardVM", "Error fetching participants", e)
             }
         }
     }

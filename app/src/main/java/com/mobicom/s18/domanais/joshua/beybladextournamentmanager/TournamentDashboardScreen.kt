@@ -137,7 +137,7 @@ fun TournamentDashboardScreen(
                 }
             } else if (tournament != null) {
                 when (selectedTabIndex) {
-                    0 -> OverviewTab(tournament!!, participants)
+                    0 -> OverviewTab(tournament = tournament!!, participants = participants)
                     1 -> MatchesTab(matches = matches, onViewMatchClick = onViewMatchClick)
                     2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                     3 -> MetricsTab(matches = matches)
