@@ -90,4 +90,5 @@ dependencies {
     implementation("io.ktor:ktor-utils:2.3.12")
 
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    implementation("com.google.zxing:core:3.5.1")
 }
