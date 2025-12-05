@@ -73,7 +73,9 @@ fun AppNavHost(){
                     navController.navigate("profile")
                 },
                 onTournamentClick = { tournamentId ->
-                    navController.navigate("tournament/$tournamentId")
+                    navController.navigate("tournament/$tournamentId") {
+                        launchSingleTop = true
+                    }
                 },
                 onJoinTournamentClick = {
                     navController.navigate("joinTournament")
@@ -100,7 +102,10 @@ fun AppNavHost(){
             CreateTournamentScreen(
                 onBackClick = { navController.popBackStack()},
                 onCreateTournamentClick = { tournamentId: String ->
-                    navController.navigate("tournament/$tournamentId")
+                    navController.navigate("tournament/$tournamentId") {
+                        popUpTo("home") { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -112,7 +117,11 @@ fun AppNavHost(){
             val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
             TournamentDashboardScreen(
                 tournamentId = tournamentId,
-                onBackClick = { navController.navigate("home") },
+                onBackClick = {
+                    navController.navigate("home") {
+                        popUpTo("home") { inclusive = true }
+                    }
+                },
                 onViewMatchClick = { match ->
                     // Navigate to match details with proper parameters
                     navController.navigate("match_details/${match.tournamentId}/${match.matchId}")
@@ -137,10 +146,6 @@ fun AppNavHost(){
                 onRecord = {
                     // Navigate to match recording screen
                     navController.navigate("match_recording/$tournamentId/$matchId")
-                },
-                onBuildSubmit = { playerId, playerName ->
-                    // Navigate to build submission with player info
-                    navController.navigate("BuildSubmit/$tournamentId/$playerId/$playerName")
                 }
             )
         }

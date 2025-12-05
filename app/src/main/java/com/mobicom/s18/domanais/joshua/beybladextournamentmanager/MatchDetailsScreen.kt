@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +44,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material3.OutlinedTextField
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.RoundDetail
@@ -146,27 +151,22 @@ fun MatchDetailsScreen(
     matchId: String,
     onBackClick: () -> Unit = {},
     onRecord: () -> Unit,
-    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
     viewModel: MatchDetailsViewModel = viewModel()
 ) {
     // Collect UI state from ViewModel
     val matchState by viewModel.matchState.collectAsState()
-    val elapsedTime by viewModel.elapsedTime.collectAsState()
-    val isTimerRunning by viewModel.isTimerRunning.collectAsState()
+    var showScoreDialog by rememberSaveable { mutableStateOf(false) }
+    var player1ScoreInput by rememberSaveable { mutableStateOf("") }
+    var player2ScoreInput by rememberSaveable { mutableStateOf("") }
 
     // Listen to real-time match updates
     LaunchedEffect(tournamentId, matchId) {
         viewModel.listenToMatch(tournamentId, matchId)
     }
-
-    // Timer effect
-    LaunchedEffect(isTimerRunning) {
-        if (isTimerRunning) {
-            while (isTimerRunning) {
-                delay(1000L)
-                viewModel.updateElapsedTime(elapsedTime + 1, tournamentId, matchId)
-            }
-        }
+    val openScoreDialog: (Match) -> Unit = { match ->
+        player1ScoreInput = match.player1Score.toString()
+        player2ScoreInput = match.player2Score.toString()
+        showScoreDialog = true
     }
 
     Scaffold(
@@ -234,36 +234,87 @@ fun MatchDetailsScreen(
             is MatchUiState.Success -> {
                 MatchDetailsContent(
                     match = state.match,
-                    elapsedTime = elapsedTime,
-                    isTimerRunning = isTimerRunning,
-                    onStartTimer = { viewModel.startTimer() },
-                    onStopTimer = { viewModel.stopTimer() },
+                    onEditScore = { openScoreDialog(state.match) },
                     onRecord = onRecord,
-                    onBuildSubmit = onBuildSubmit,
                     modifier = Modifier.padding(paddingValues)
                 )
+
+                if (showScoreDialog) {
+                    EditScoreDialog(
+                        player1Name = state.match.player1Name,
+                        player2Name = state.match.player2Name,
+                        player1Score = player1ScoreInput,
+                        player2Score = player2ScoreInput,
+                        onPlayer1ScoreChange = { player1ScoreInput = it.filter { ch -> ch.isDigit() } },
+                        onPlayer2ScoreChange = { player2ScoreInput = it.filter { ch -> ch.isDigit() } },
+                        onDismiss = { showScoreDialog = false },
+                        onConfirm = {
+                            val p1 = player1ScoreInput.toIntOrNull()
+                            val p2 = player2ScoreInput.toIntOrNull()
+                            if (p1 != null && p2 != null) {
+                                viewModel.overrideScore(tournamentId, matchId, p1, p2)
+                                showScoreDialog = false
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
+fun EditScoreDialog(
+    player1Name: String,
+    player2Name: String,
+    player1Score: String,
+    player2Score: String,
+    onPlayer1ScoreChange: (String) -> Unit,
+    onPlayer2ScoreChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Scores") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = player1Score,
+                    onValueChange = onPlayer1ScoreChange,
+                    label = { Text(player1Name) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = player2Score,
+                    onValueChange = onPlayer2ScoreChange,
+                    label = { Text(player2Name) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
 fun MatchDetailsContent(
     match: Match,
-    elapsedTime: Long,
-    isTimerRunning: Boolean,
-    onStartTimer: () -> Unit,
-    onStopTimer: () -> Unit,
+    onEditScore: () -> Unit,
     onRecord: () -> Unit,
-    onBuildSubmit: (playerId: String, playerName: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    fun formatTime(totalSeconds: Long): String {
-        val minutes = TimeUnit.SECONDS.toMinutes(totalSeconds)
-        val seconds = totalSeconds - TimeUnit.MINUTES.toSeconds(minutes)
-        return String.format("%02d:%02d", minutes, seconds)
-    }
-
     androidx.compose.foundation.lazy.LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -331,7 +382,6 @@ fun MatchDetailsContent(
 
         item { Spacer(modifier = Modifier.height(12.dp)) }
 
-        // Timer and action buttons
         item {
             Column(
                 modifier = Modifier
@@ -339,88 +389,27 @@ fun MatchDetailsContent(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Timer",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = formatTime(elapsedTime),
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 36.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                Button(
+                    onClick = onRecord,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
-                    Button(
-                        onClick = onStartTimer,
-                        enabled = !isTimerRunning,
-                        modifier = Modifier
-                            .width(140.dp)
-                            .height(44.dp)
-                    ) {
-                        Text("Start")
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Button(
-                        onClick = onStopTimer,
-                        enabled = isTimerRunning,
-                        modifier = Modifier
-                            .width(140.dp)
-                            .height(44.dp)
-                    ) {
-                        Text("Stop")
-                    }
+                    Text("Start Match", style = MaterialTheme.typography.titleMedium)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                Button(
+                    onClick = onEditScore,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onRecord,
-                        modifier = Modifier
-                            .width(200.dp)
-                            .height(48.dp)
-                    ) {
-                        Text("Record Match", style = MaterialTheme.typography.titleMedium)
-                    }
+                    Text("Edit Score")
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            // For now, submit build for player 1
-                            // TODO: Add UI to select which player's build to submit
-                            onBuildSubmit(match.player1Id, match.player1Name)
-                        },
-                        modifier = Modifier
-                            .width(190.dp)
-                            .height(44.dp)
-                    ) {
-                        Text("Submit Final Build")
-                    }
-                }
-            }
-        }
+             }
+         }
 
         item { Spacer(modifier = Modifier.height(12.dp)) }
 
@@ -468,15 +457,24 @@ fun MatchDetailsScreenPreview() {
         )
     )
 
-    MatchDetailsContent(
-        match = sampleMatch,
-        elapsedTime = 180L,
-        isTimerRunning = false,
-        onStartTimer = {},
-        onStopTimer = {},
-        onRecord = {},
-        onBuildSubmit = { _, _ -> }
-    )
+    var previewScoresVisible by rememberSaveable { mutableStateOf(false) }
+    Column {
+        MatchDetailsContent(
+            match = sampleMatch,
+            onEditScore = { previewScoresVisible = true },
+            onRecord = {}
+        )
+        if (previewScoresVisible) {
+            EditScoreDialog(
+                player1Name = sampleMatch.player1Name,
+                player2Name = sampleMatch.player2Name,
+                player1Score = sampleMatch.player1Score.toString(),
+                player2Score = sampleMatch.player2Score.toString(),
+                onPlayer1ScoreChange = {},
+                onPlayer2ScoreChange = {},
+                onDismiss = { previewScoresVisible = false },
+                onConfirm = { previewScoresVisible = false }
+            )
+        }
+    }
 }
-
-

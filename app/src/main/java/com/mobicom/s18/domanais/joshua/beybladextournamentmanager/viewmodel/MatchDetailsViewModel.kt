@@ -188,6 +188,17 @@ class MatchDetailsViewModel(
             player2Score = player2Score
         )
     }
+
+    fun overrideScore(tournamentId: String, matchId: String, player1Score: Int, player2Score: Int) {
+        viewModelScope.launch {
+            repository.updateMatchScore(
+                tournamentId = tournamentId,
+                matchId = matchId,
+                player1Score = player1Score,
+                player2Score = player2Score
+            )
+        }
+    }
 }
 
 /**
@@ -198,4 +209,3 @@ sealed class MatchUiState {
     data class Success(val match: Match) : MatchUiState()
     data class Error(val message: String) : MatchUiState()
 }
-
