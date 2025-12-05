@@ -14,6 +14,7 @@ data class Tournament(
     val stage1Format: String = "", // e.g., "Round Robin", "Swiss System"
     val stage2Format: String = "", // e.g., "Single Elimination" (Only used if stageCount == 2)
     val roundsToPlay: Int = 1,
+    val topXQualifiers: Int = 4,
 
     // --- Battle Rules ---
     val battleType: String = "3on3 Deck", // Default Philippine Standard

@@ -43,6 +43,7 @@ fun CreateTournamentScreen(
     var selectedStage2Format by remember { mutableStateOf(finalStageOptions[0]) }
 
     var roundsToPlay by remember { mutableStateOf(1) }
+    var topXQualifiers by remember { mutableStateOf(4) }
 
     // Battle Rules
     val battleTypeOptions = listOf("3on3 Deck", "1on1 Standard", "5G Battle")
@@ -172,12 +173,37 @@ fun CreateTournamentScreen(
                 // Stage 2 Config
                 if (stageCount == 2) {
                     Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text("Final Stage Settings", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+
                     DropdownSelector(
                         label = "Final Stage Format",
                         options = finalStageOptions,
                         selectedOption = selectedStage2Format,
                         onOptionSelected = { selectedStage2Format = it }
                     )
+
+                    // NEW: Qualifiers Selector
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Qualifiers from Group Stage", style = MaterialTheme.typography.labelMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Slider(
+                            value = topXQualifiers.toFloat(),
+                            onValueChange = { topXQualifiers = it.toInt() },
+                            valueRange = 2f..16f,
+                            steps = 13, // (16-2)-1 = 13 steps
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Top $topXQualifiers",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(60.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                        )
+                    }
+                    Text("The Top $topXQualifiers players will advance to the Finals.", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color.Gray)
                 }
             }
 
@@ -273,6 +299,8 @@ fun CreateTournamentScreen(
                             stage2Format = if (stageCount == 2) selectedStage2Format else "",
 
                             roundsToPlay = roundsToPlay,
+                            topXQualifiers = if (stageCount == 2) topXQualifiers else 4,
+                            currentStage = 1,
 
                             // Battle Rules
                             battleType = selectedBattleType,

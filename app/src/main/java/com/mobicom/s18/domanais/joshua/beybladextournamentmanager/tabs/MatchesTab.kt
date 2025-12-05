@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NextPlan
 import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.NextPlan
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -44,6 +45,10 @@ fun MatchesTab(
     val currentRoundNumber = matches.maxOfOrNull { it.matchNumber.toString().substringAfter("Round ").toIntOrNull() ?: 0 } ?: 0
     val isTournamentComplete = false // Ideally check against tournament.roundsToPlay
 
+    val players = tournament.tournamentPlayers.size
+    val matchesPerRound = (players + 1) / 2
+    val calculatedCurrentRound = if (matchesPerRound > 0) matches.size / matchesPerRound else 0
+
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -51,7 +56,7 @@ fun MatchesTab(
         // Show message if no matches exist
         if (isHost) {
             if (!hasMatches) {
-                // CASE 1: No matches yet -> Start Tournament
+                // ... (Generate Round 1) ...
                 item {
                     GeneratorCard(
                         title = "Ready to Start?",
@@ -62,41 +67,33 @@ fun MatchesTab(
                     )
                 }
             } else if (currentRoundFinished) {
-                // CASE 2: Round Finished -> Generate Next Round
-                // We show this button if we haven't played enough rounds yet
-                // For Swiss, we play 'roundsToPlay' rounds.
-                // We estimate current round by dividing matches by (Players/2)
-                val players = tournament.tournamentPlayers.size
-                val matchesPerRound = players / 2
-                val calculatedCurrentRound = matches.size / matchesPerRound
+                // CHECK: Are we in Stage 1 of a 2-Stage tournament?
+                val isStage1Done = tournament.stageCount == 2 && tournament.currentStage == 1
+                // For Swiss/RR, check if we played enough rounds
+                val areRoundsDone = calculatedCurrentRound >= tournament.roundsToPlay
 
-                if (calculatedCurrentRound < tournament.roundsToPlay) {
+                if (isStage1Done && (areRoundsDone || tournament.stage1Format == "Single Elimination")) {
+                    // CONDITION: Stage 1 is totally finished. Time for Stage 2.
                     item {
                         GeneratorCard(
-                            title = "Round Complete",
-                            subtitle = "Generate pairings for the next round based on current standings.",
+                            title = "Group Stage Complete",
+                            subtitle = "Calculate standings and generate the Final Bracket?",
+                            buttonText = "Start Finals",
+                            icon = Icons.Default.EmojiEvents,
+                            onClick = onGenerateMatches
+                        )
+                    }
+                } else if (calculatedCurrentRound < tournament.roundsToPlay && (tournament.stage1Format == "Swiss System" || tournament.stage1Format == "Round Robin")) {
+                    // CONDITION: Generate Next Round (Swiss/RR)
+                    item {
+                        GeneratorCard(
+                            title = "Round $calculatedCurrentRound Complete",
+                            subtitle = "Generate pairings for the next round.",
                             buttonText = "Generate Round ${calculatedCurrentRound + 1}",
                             icon = Icons.Default.NextPlan,
                             onClick = onGenerateMatches
                         )
                     }
-                } else if (tournament.stageCount == 2 && tournament.currentStage == 1) {
-                    // Stage 1 Done -> Generate Stage 2
-                    item {
-                        GeneratorCard(
-                            title = "Group Stage Complete",
-                            subtitle = "Ready to generate the Final Stage bracket?",
-                            buttonText = "Generate Finals",
-                            icon = Icons.Default.NextPlan,
-                            onClick = onGenerateMatches
-                        )
-                    }
-                }
-            }
-        } else if (matches.isEmpty()) {
-            item {
-                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text("Waiting for host to start the tournament...", color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
         }

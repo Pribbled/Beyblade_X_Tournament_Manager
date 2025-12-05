@@ -13,6 +13,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Repository for Match-related Firestore operations.
@@ -21,12 +27,12 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournamen
 class MatchRepository(
     private val db: FirebaseFirestore = FirebaseModule.db
 ) {
-
     companion object {
         private const val TOURNAMENTS_COLLECTION = "tournaments"
         private const val MATCHES_COLLECTION = "matches"
         private const val FINAL_BUILDS_COLLECTION = "final_builds"
     }
+    private val finalsListener = ConcurrentHashMap<String, ListenerRegistration>()
 
     /**
      * Get all matches for a tournament with real-time updates.
@@ -73,6 +79,48 @@ class MatchRepository(
                 listenerRegistration?.remove()
             }
         }
+    }
+
+    private suspend fun createNextElimRound(tournamentId: String, players: List<UserProfile>, roundName: String) {
+        val tournament = db.collection(TOURNAMENTS_COLLECTION).document(tournamentId).get().await().toObject(Tournament::class.java)
+            ?: return
+        val existingRound = db.collection(TOURNAMENTS_COLLECTION)
+            .document(tournamentId)
+            .collection(MATCHES_COLLECTION)
+            .whereEqualTo("round", roundName)
+            .get()
+            .await()
+        if (!existingRound.isEmpty) return
+        val batch = db.batch()
+        val existingMatchesCount = db.collection(TOURNAMENTS_COLLECTION)
+            .document(tournamentId)
+            .collection(MATCHES_COLLECTION)
+            .get().await().size()
+        var matchCount = existingMatchesCount
+
+        for (i in 0 until players.size step 2) {
+            if (i + 1 < players.size) {
+                val p1 = players[i]
+                val p2 = players[i + 1]
+                val match = createMatch(
+                    tournament.copy(currentStage = 2),
+                    matchCount,
+                    roundName,
+                    p1,
+                    p2
+                )
+                batch.set(
+                    db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournamentId)
+                        .collection(MATCHES_COLLECTION)
+                        .document(match.matchId),
+                    match
+                )
+                matchCount++
+            }
+        }
+
+        batch.commit().await()
     }
 
     /**
@@ -351,10 +399,43 @@ class MatchRepository(
             // Update the match document
             matchDoc.reference.update(updates).await()
 
+            if (hasWinner) {
+                checkAndScheduleFinalsNextRound(tournamentId, currentMatch.round)
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun checkAndScheduleFinalsNextRound(tournamentId: String, roundName: String) {
+        val currentStageMatches = db.collection(TOURNAMENTS_COLLECTION)
+            .document(tournamentId)
+            .collection(MATCHES_COLLECTION)
+            .whereEqualTo("round", roundName)
+            .get()
+            .await()
+            .toObjects(Match::class.java)
+
+        if (currentStageMatches.isNotEmpty() && currentStageMatches.all { it.status == "completed" }) {
+            when (roundName) {
+                "Quarter-Finals" -> scheduleNextElimRoundInternal(tournamentId, currentStageMatches, "Semi-Finals")
+                "Semi-Finals" -> scheduleNextElimRoundInternal(tournamentId, currentStageMatches, "Grand Finals")
+            }
+        }
+    }
+
+    private suspend fun scheduleNextElimRoundInternal(tournamentId: String, matches: List<Match>, nextRoundName: String) {
+        val winners = matches.mapNotNull { match ->
+            match.winnerId?.let { winnerId ->
+                UserProfile(uid = winnerId, bladerName = match.winnerName ?: "")
+            }
+        }
+
+        if (winners.size < 2) return
+
+        createNextElimRound(tournamentId, winners, nextRoundName)
     }
 
     /**
@@ -1002,97 +1083,179 @@ class MatchRepository(
                 return Result.failure(Exception("Need at least 2 players to start."))
             }
 
-            // 1. Check if matches already exist to determine Round Number
-            val existingMatches = db.collection(TOURNAMENTS_COLLECTION)
-                .document(tournament.uid)
-                .collection(MATCHES_COLLECTION)
-                .get()
-                .await()
-                .toObjects(Match::class.java)
+            // Detect if we are generating for Stage 2 (Finals)
+            val isFinalStage = tournament.stageCount == 2 && tournament.currentStage == 2
 
-            val currentMatchCount = existingMatches.size
-            val matchesPerRound = (participants.size + 1) / 2 // Accounts for BYE
-            val currentRound = (currentMatchCount / matchesPerRound) + 1
+            // If Final Stage, we MUST select qualifiers based on Stage 1 results
+            val playersForGeneration = if (isFinalStage) {
+                // 1. Fetch Stage 1 Matches
+                val stage1Matches = db.collection(TOURNAMENTS_COLLECTION)
+                    .document(tournament.uid)
+                    .collection(MATCHES_COLLECTION)
+                    .whereLessThan("matchNumber", 1000) // Simple filter, or just fetch all
+                    .get()
+                    .await()
+                    .toObjects(Match::class.java)
+                    .filter { it.status == "completed" }
 
-            // If we have played all rounds, stop.
-            if (currentRound > tournament.roundsToPlay && tournament.stage1Format != "Single Elimination") {
-                return Result.failure(Exception("All rounds already generated!"))
-            }
-
-            val batch = db.batch()
-            val newMatches = mutableListOf<Match>()
-            var matchCounter = currentMatchCount + 1
-
-            // --- PAIRING LOGIC ---
-            val pairings = if (currentRound == 1) {
-                // Round 1: Random Pairing
-                val shuffled = participants.shuffled().toMutableList()
-                if (shuffled.size % 2 != 0) shuffled.add(UserProfile(uid = "BYE", bladerName = "BYE"))
-                shuffled.chunked(2)
-            } else {
-                // Round 2+: Swiss Pairing (High Score vs High Score)
-                // 1. Calculate stats from existing matches
-                val playerWins = participants.associate { it.uid to 0 }.toMutableMap()
-
-                existingMatches.forEach { match ->
-                    if (match.winnerId != null) {
-                        playerWins[match.winnerId] = (playerWins[match.winnerId] ?: 0) + 1
+                // 2. Calculate Standings (Wins -> Points)
+                val stats = participants.associateWith { profile ->
+                    val wins = stage1Matches.count { it.winnerId == profile.uid }
+                    val points = stage1Matches.sumOf {
+                        if (it.player1Id == profile.uid) it.player1Score else if (it.player2Id == profile.uid) it.player2Score else 0
                     }
+                    Pair(wins, points)
                 }
 
-                // 2. Sort players by Wins (Descending)
-                val sortedPlayers = participants.sortedByDescending { playerWins[it.uid] ?: 0 }.toMutableList()
-                if (sortedPlayers.size % 2 != 0) sortedPlayers.add(UserProfile(uid = "BYE", bladerName = "BYE"))
+                // 3. Sort and Cut to Top 4
+                // Sort by Wins Descending, then Points Descending
+                val cutoff = tournament.topXQualifiers // <--- USE THE SETTING HERE
 
-                // 3. Pair adjacent players (1vs2, 3vs4, etc.)
-                sortedPlayers.chunked(2)
+                val topQualifiers = stats.entries.sortedWith(
+                    compareByDescending<Map.Entry<UserProfile, Pair<Int, Int>>> { it.value.first } // Wins
+                        .thenByDescending { it.value.second } // Points
+                ).take(cutoff).map { it.key }
+
+                if (topQualifiers.size < 2) return Result.failure(Exception("Not enough players finished Stage 1 to generate Finals."))
+                topQualifiers
+            } else {
+                participants // For Stage 1, use everyone
             }
 
-            // --- GENERATE DOCUMENTS ---
-            pairings.forEach { pair ->
-                if (pair.size == 2) {
-                    val p1 = pair[0]
-                    val p2 = pair[1]
+            // Determine Format
+            val format = if (isFinalStage) tournament.stage2Format else tournament.stage1Format
+            println("Generating matches for Stage: ${tournament.currentStage}, Format: $format")
+            val batch = db.batch()
+            val matches = mutableListOf<Match>()
 
-                    val matchId = "match_${tournament.uid}_r${currentRound}_${matchCounter}"
-                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
-                        .document(tournament.uid)
-                        .collection(MATCHES_COLLECTION)
-                        .document(matchId)
+            // Check existing matches to offset ID/Number
+            val existingMatchesCount = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournament.uid)
+                .collection(MATCHES_COLLECTION)
+                .get().await().size()
 
-                    // Auto-complete BYE matches
-                    val isBye = p2.uid == "BYE"
+            var matchCount = existingMatchesCount
 
-                    val match = Match(
-                        matchId = matchId,
-                        tournamentId = tournament.uid,
-                        matchNumber = matchCounter,
-                        round = "Round $currentRound",
-                        format = tournament.battleType,
-                        player1Id = p1.uid,
-                        player1Name = p1.bladerName,
-                        player2Id = p2.uid,
-                        player2Name = p2.bladerName,
+            when (format) {
+                "Round Robin" -> {
+                    // ... (Existing Round Robin Logic) ...
+                    val rounds = tournament.roundsToPlay
+                    val ids = playersForGeneration.map { it.uid }.toMutableList()
+                    if (ids.size % 2 != 0) ids.add("BYE")
 
-                        // Auto-win for P1 if P2 is BYE
-                        status = if (isBye) "completed" else "scheduled",
-                        winnerId = if (isBye) p1.uid else null,
-                        winnerName = if (isBye) p1.bladerName else null,
+                    val numRounds = ids.size - 1
+                    val halfSize = ids.size / 2
 
-                        createdAt = com.google.firebase.Timestamp.now(),
-                        updatedAt = com.google.firebase.Timestamp.now()
-                    )
-                    batch.set(matchRef, match)
-                    newMatches.add(match)
-                    matchCounter++
+                    for (r in 0 until (numRounds * rounds)) {
+                        for (i in 0 until halfSize) {
+                            val p1 = ids[i]
+                            val p2 = ids[ids.size - 1 - i]
+
+                            if (p1 != "BYE" && p2 != "BYE") {
+                                val p1Profile = playersForGeneration.find { it.uid == p1 } ?: participants.find { it.uid == p1 }
+                                val p2Profile = playersForGeneration.find { it.uid == p2 } ?: participants.find { it.uid == p2 }
+
+                                val matchId = "match_${tournament.uid}_s${tournament.currentStage}_r${r}_$matchCount"
+                                val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                                    .document(tournament.uid)
+                                    .collection(MATCHES_COLLECTION)
+                                    .document(matchId)
+
+                                val match = Match(
+                                    matchId = matchId,
+                                    tournamentId = tournament.uid,
+                                    matchNumber = matchCount + 1,
+                                    round = "Round ${r + 1}",
+                                    format = tournament.battleType,
+                                    player1Id = p1,
+                                    player1Name = p1Profile?.bladerName ?: "Unknown",
+                                    player2Id = p2,
+                                    player2Name = p2Profile?.bladerName ?: "Unknown",
+                                    status = "scheduled"
+                                )
+                                batch.set(matchRef, match)
+                                matchCount++
+                            }
+                        }
+                        ids.add(1, ids.removeAt(ids.size - 1))
+                    }
+                }
+                "Single Elimination" -> {
+                    // Logic for Final Stage (Top 4 seeded) or Stage 1 (Random)
+                    if (isFinalStage) {
+                        // --- DYNAMIC FINAL STAGE SEEDING ---
+                        // Standard Seeding: 1 vs Last, 2 vs Second Last, etc.
+                        val seededPlayers = playersForGeneration // Already sorted by Rank 1 to X
+                        val matchCountForRound = seededPlayers.size / 2
+
+                        // Determine Round Name dynamically
+                        val roundName = when (seededPlayers.size) {
+                            2 -> "Grand Finals"
+                            4 -> "Semi-Finals"
+                            8 -> "Quarter-Finals"
+                            16 -> "Round of 16"
+                            else -> "Elimination Round 1"
+                        }
+
+                        for (i in 0 until matchCountForRound) {
+                            val highSeed = seededPlayers[i]
+                            val lowSeed = seededPlayers[seededPlayers.size - 1 - i]
+
+                            val match = createMatch(tournament, matchCount, roundName, highSeed, lowSeed)
+                            batch.set(db.collection(TOURNAMENTS_COLLECTION).document(tournament.uid).collection(MATCHES_COLLECTION).document(match.matchId), match)
+                            matches.add(match)
+                            matchCount++
+                        }
+                    } else {
+                        // Stage 1: Random Pairing
+                        val shuffled = playersForGeneration.shuffled()
+                        for (i in 0 until shuffled.size step 2) {
+                            if (i + 1 < shuffled.size) {
+                                val match = createMatch(tournament, matchCount, "Elimination Round 1", shuffled[i], shuffled[i+1])
+                                batch.set(db.collection(TOURNAMENTS_COLLECTION).document(tournament.uid).collection(MATCHES_COLLECTION).document(match.matchId), match)
+                                matches.add(match)
+                                matchCount++
+                            }
+                        }
+                    }
+                }
+                "Swiss System" -> {
+                    // ... (Existing Swiss Logic) ...
+                    val shuffled = playersForGeneration.shuffled()
+                    for (i in 0 until shuffled.size step 2) {
+                        if (i + 1 < shuffled.size) {
+                            val match = createMatch(tournament, matchCount+1, "Swiss Round 1", shuffled[i], shuffled[i+1])
+                            batch.set(db.collection(TOURNAMENTS_COLLECTION).document(tournament.uid).collection(MATCHES_COLLECTION).document(match.matchId), match)
+                            matchCount++
+                        }
+                    }
+                }
+                else -> {
+                    return Result.failure(Exception("Generation for $format not implemented"))
                 }
             }
 
             batch.commit().await()
-            Result.success(newMatches.size)
+            Result.success(matchCount)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-}
 
+    private fun createMatch(t: Tournament, num: Int, round: String, p1: UserProfile, p2: UserProfile): Match {
+        return Match(
+            matchId = "match_${t.uid}_${num}",
+            tournamentId = t.uid,
+            matchNumber = num,
+            round = round,
+            format = t.battleType,
+            player1Id = p1.uid,
+            player1Name = p1.bladerName,
+            player2Id = p2.uid,
+            player2Name = p2.bladerName,
+            status = "scheduled"
+        )
+    }
+
+
+}

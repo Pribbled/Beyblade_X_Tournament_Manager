@@ -148,10 +148,16 @@ fun TournamentDashboardScreen(
                         isHost = isHost,
                         onViewMatchClick = onViewMatchClick,
                         onGenerateMatches = {
-                            viewModel.generateMatches(tournament!!)
+                            val shouldAdvanceToFinals = tournament!!.stageCount == 2 && tournament!!.currentStage == 1 &&
+                                matches.isNotEmpty() && matches.all { it.status == "completed" }
+                            viewModel.generateMatches(tournament!!, advanceToFinals = shouldAdvanceToFinals)
                         }
                     )
-                    2 -> BracketTab(onViewMatchClick = onViewMatchClick)
+                    2 -> BracketTab(
+                        tournament = tournament!!,
+                        matches = matches,
+                        onViewMatchClick = onViewMatchClick
+                    )
                     3 -> MetricsTab(matches = matches)
                 }
             } else {

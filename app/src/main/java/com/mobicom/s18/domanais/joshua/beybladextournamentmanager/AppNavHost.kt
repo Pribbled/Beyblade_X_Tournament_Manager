@@ -120,27 +120,6 @@ fun AppNavHost(){
             )
         }
 
-        /**
-         * Match Details Screen Route
-         *
-         * Displays detailed information about a specific match with real-time Firestore updates.
-         * Integrated with MatchDetailsViewModel for state management.
-         *
-         * Route: match_details/{tournamentId}/{matchId}
-         * Parameters:
-         *   - tournamentId: ID of the tournament
-         *   - matchId: ID of the specific match
-         *
-         * Features:
-         *   - Real-time score updates from Firestore
-         *   - Player details and statistics
-         *   - Match timer with start/stop controls
-         *   - Navigation to match recording
-         *   - Navigation to final round build submission
-         *
-         * Note: SimpleMatchDetailsScreen.kt has been DELETED.
-         * This route now uses the original MatchDetailsScreen.kt with full backend integration.
-         */
         composable(
             route = "match_details/{tournamentId}/{matchId}",
             arguments = listOf(

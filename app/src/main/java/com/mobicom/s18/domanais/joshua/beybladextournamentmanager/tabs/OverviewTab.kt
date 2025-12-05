@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
@@ -28,6 +29,7 @@ fun OverviewTab(
     participants: List<UserProfile> = emptyList()
 ) {
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -47,10 +49,15 @@ fun OverviewTab(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Row 1: Format & Battle Type
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val formatText = if (tournament.stageCount > 1) {
+                        "${tournament.stage1Format} → ${tournament.stage2Format}"
+                    } else {
+                        tournament.stage1Format.ifBlank { "Standard" }
+                    }
                     InfoCard(
                         icon = Icons.Outlined.EmojiEvents,
                         label = "Format",
-                        value = if (tournament.stageCount > 1) "Multi-Stage" else tournament.stage1Format.ifBlank { "Standard" },
+                        value = formatText,
                         modifier = Modifier.weight(1f)
                     )
                     InfoCard(
@@ -220,7 +227,9 @@ fun InfoCard(icon: ImageVector, label: String, value: String, modifier: Modifier
                 text = value,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+                maxLines = 2,
+                minLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

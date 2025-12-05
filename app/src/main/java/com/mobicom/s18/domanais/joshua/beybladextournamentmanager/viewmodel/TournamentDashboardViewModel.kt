@@ -97,7 +97,7 @@ class TournamentDashboardViewModel(
         }
     }
 
-    fun generateMatches(tournament: Tournament) {
+    fun generateMatches(tournament: Tournament, advanceToFinals: Boolean = false) {
         val currentParticipants = _participants.value
         if (currentParticipants.isEmpty()) {
             _error.value = "No participants loaded. Cannot generate matches."
@@ -106,19 +106,20 @@ class TournamentDashboardViewModel(
 
         viewModelScope.launch {
             _isLoading.value = true
-            val result = matchRepository.generateMatchesForTournament(tournament, currentParticipants)
+            val shouldAdvanceToFinals = advanceToFinals && tournament.stageCount == 2 && tournament.currentStage == 1
 
-            result.fold(
-                onSuccess = { count ->
-                    // Matches generated! The real-time listener will automatically update the list.
-                    // We just turn off loading.
-                    _isLoading.value = false
-                },
-                onFailure = { e ->
-                    _error.value = "Failed to generate matches: ${e.message}"
-                    _isLoading.value = false
-                }
-            )
+            if (shouldAdvanceToFinals) {
+                val db = FirebaseModule.db
+                db.collection("tournaments").document(tournament.uid)
+                    .update("currentStage", 2)
+                    .await()
+                val updatedTournament = tournament.copy(currentStage = 2)
+                matchRepository.generateMatchesForTournament(updatedTournament, currentParticipants)
+            } else {
+                matchRepository.generateMatchesForTournament(tournament, currentParticipants)
+            }
+
+            _isLoading.value = false
         }
     }
 }
