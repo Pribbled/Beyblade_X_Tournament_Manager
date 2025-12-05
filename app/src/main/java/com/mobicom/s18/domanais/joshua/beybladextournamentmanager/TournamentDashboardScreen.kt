@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -46,7 +47,7 @@ fun TournamentDashboardScreen(
     val db = FirebaseFirestore.getInstance()
     var tournament by remember { mutableStateOf<Tournament?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedTabIndex by remember { mutableStateOf(0) }
+    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
 
     // QR Code Dialog State

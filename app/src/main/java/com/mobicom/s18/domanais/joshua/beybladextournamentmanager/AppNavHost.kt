@@ -112,7 +112,7 @@ fun AppNavHost(){
             val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
             TournamentDashboardScreen(
                 tournamentId = tournamentId,
-                onBackClick = { navController.popBackStack() },
+                onBackClick = { navController.navigate("home") },
                 onViewMatchClick = { match ->
                     // Navigate to match details with proper parameters
                     navController.navigate("match_details/${match.tournamentId}/${match.matchId}")
