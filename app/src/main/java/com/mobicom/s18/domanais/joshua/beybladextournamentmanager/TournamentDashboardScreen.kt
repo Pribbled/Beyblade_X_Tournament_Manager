@@ -33,6 +33,7 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewT
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.TournamentDashboardViewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.util.QRCodeUtils
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +52,9 @@ fun TournamentDashboardScreen(
     // QR Code Dialog State
     var showShareDialog by remember { mutableStateOf(false) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val currentUser = FirebaseModule.auth.currentUser
+    val isHost = tournament != null && currentUser != null && tournament!!.tournamentOwner == currentUser.uid
 
     LaunchedEffect(tournamentId) {
         if (tournamentId == "preview1") {
@@ -138,7 +142,15 @@ fun TournamentDashboardScreen(
             } else if (tournament != null) {
                 when (selectedTabIndex) {
                     0 -> OverviewTab(tournament = tournament!!, participants = participants)
-                    1 -> MatchesTab(matches = matches, onViewMatchClick = onViewMatchClick)
+                    1 -> MatchesTab(
+                        tournament = tournament!!,
+                        matches = matches,
+                        isHost = isHost,
+                        onViewMatchClick = onViewMatchClick,
+                        onGenerateMatches = {
+                            viewModel.generateMatches(tournament!!)
+                        }
+                    )
                     2 -> BracketTab(onViewMatchClick = onViewMatchClick)
                     3 -> MetricsTab(matches = matches)
                 }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 
 /**
  * Repository for Match-related Firestore operations.
@@ -988,6 +989,108 @@ class MatchRepository(
             Result.success(publicUrl)
         } catch (e: Exception) {
             // Handle any errors during upload or Firestore update
+            Result.failure(e)
+        }
+    }
+
+    suspend fun generateMatchesForTournament(
+        tournament: Tournament,
+        participants: List<UserProfile>
+    ): Result<Int> {
+        return try {
+            if (participants.size < 2) {
+                return Result.failure(Exception("Need at least 2 players to start."))
+            }
+
+            // 1. Check if matches already exist to determine Round Number
+            val existingMatches = db.collection(TOURNAMENTS_COLLECTION)
+                .document(tournament.uid)
+                .collection(MATCHES_COLLECTION)
+                .get()
+                .await()
+                .toObjects(Match::class.java)
+
+            val currentMatchCount = existingMatches.size
+            val matchesPerRound = (participants.size + 1) / 2 // Accounts for BYE
+            val currentRound = (currentMatchCount / matchesPerRound) + 1
+
+            // If we have played all rounds, stop.
+            if (currentRound > tournament.roundsToPlay && tournament.stage1Format != "Single Elimination") {
+                return Result.failure(Exception("All rounds already generated!"))
+            }
+
+            val batch = db.batch()
+            val newMatches = mutableListOf<Match>()
+            var matchCounter = currentMatchCount + 1
+
+            // --- PAIRING LOGIC ---
+            val pairings = if (currentRound == 1) {
+                // Round 1: Random Pairing
+                val shuffled = participants.shuffled().toMutableList()
+                if (shuffled.size % 2 != 0) shuffled.add(UserProfile(uid = "BYE", bladerName = "BYE"))
+                shuffled.chunked(2)
+            } else {
+                // Round 2+: Swiss Pairing (High Score vs High Score)
+                // 1. Calculate stats from existing matches
+                val playerWins = participants.associate { it.uid to 0 }.toMutableMap()
+
+                existingMatches.forEach { match ->
+                    if (match.winnerId != null) {
+                        playerWins[match.winnerId] = (playerWins[match.winnerId] ?: 0) + 1
+                    }
+                }
+
+                // 2. Sort players by Wins (Descending)
+                val sortedPlayers = participants.sortedByDescending { playerWins[it.uid] ?: 0 }.toMutableList()
+                if (sortedPlayers.size % 2 != 0) sortedPlayers.add(UserProfile(uid = "BYE", bladerName = "BYE"))
+
+                // 3. Pair adjacent players (1vs2, 3vs4, etc.)
+                sortedPlayers.chunked(2)
+            }
+
+            // --- GENERATE DOCUMENTS ---
+            pairings.forEach { pair ->
+                if (pair.size == 2) {
+                    val p1 = pair[0]
+                    val p2 = pair[1]
+
+                    val matchId = "match_${tournament.uid}_r${currentRound}_${matchCounter}"
+                    val matchRef = db.collection(TOURNAMENTS_COLLECTION)
+                        .document(tournament.uid)
+                        .collection(MATCHES_COLLECTION)
+                        .document(matchId)
+
+                    // Auto-complete BYE matches
+                    val isBye = p2.uid == "BYE"
+
+                    val match = Match(
+                        matchId = matchId,
+                        tournamentId = tournament.uid,
+                        matchNumber = matchCounter,
+                        round = "Round $currentRound",
+                        format = tournament.battleType,
+                        player1Id = p1.uid,
+                        player1Name = p1.bladerName,
+                        player2Id = p2.uid,
+                        player2Name = p2.bladerName,
+
+                        // Auto-win for P1 if P2 is BYE
+                        status = if (isBye) "completed" else "scheduled",
+                        winnerId = if (isBye) p1.uid else null,
+                        winnerName = if (isBye) p1.bladerName else null,
+
+                        createdAt = com.google.firebase.Timestamp.now(),
+                        updatedAt = com.google.firebase.Timestamp.now()
+                    )
+                    batch.set(matchRef, match)
+                    newMatches.add(match)
+                    matchCounter++
+                }
+            }
+
+            batch.commit().await()
+            Result.success(newMatches.size)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }

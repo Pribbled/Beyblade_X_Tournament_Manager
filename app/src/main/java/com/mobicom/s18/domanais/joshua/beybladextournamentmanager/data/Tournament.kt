@@ -7,11 +7,13 @@ data class Tournament(
     val uid: String = "",
     val tournamentOwner: String = "",
     val name: String = "",
+    val tournamentFormat: String = "",
 
     // --- Structure Settings ---
     val stageCount: Int = 1, // 1 or 2
     val stage1Format: String = "", // e.g., "Round Robin", "Swiss System"
     val stage2Format: String = "", // e.g., "Single Elimination" (Only used if stageCount == 2)
+    val roundsToPlay: Int = 1,
 
     // --- Battle Rules ---
     val battleType: String = "3on3 Deck", // Default Philippine Standard
@@ -31,7 +33,9 @@ data class Tournament(
     val tournamentJudges: List<String> = emptyList(),
     val tournamentCode: String = generateTournamentCode(),
     val status: String = "upcoming",
-    val startDate: String = ""
+    val startDate: String = "",
+    val currentStage: Int = 1, // 1 = Stage 1 (Group/Main), 2 = Stage 2 (Finals)
+    val isStage1Complete: Boolean = false
 )
 
 fun generateTournamentCode(): String {

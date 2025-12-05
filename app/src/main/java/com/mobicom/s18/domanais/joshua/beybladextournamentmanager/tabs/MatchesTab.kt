@@ -3,14 +3,21 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.NextPlan
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.NextPlan
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 /**
@@ -20,8 +27,11 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
  */
 @Composable
 fun MatchesTab(
+    tournament: Tournament,
     matches: List<Match>, // Accepts list directly from ViewModel
-    onViewMatchClick: (Match) -> Unit = {}
+    isHost: Boolean = false, // Check if current user is owner
+    onViewMatchClick: (Match) -> Unit = {},
+    onGenerateMatches: () -> Unit = {}
 ) {
     // Separate matches by status
     val upcomingMatches = matches.filter {
@@ -29,65 +39,104 @@ fun MatchesTab(
     }
     val completedMatches = matches.filter { it.status == "completed" }
 
+    val hasMatches = matches.isNotEmpty()
+    val currentRoundFinished = hasMatches && matches.all { it.status == "completed" }
+    val currentRoundNumber = matches.maxOfOrNull { it.matchNumber.toString().substringAfter("Round ").toIntOrNull() ?: 0 } ?: 0
+    val isTournamentComplete = false // Ideally check against tournament.roundsToPlay
+
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Show message if no matches exist
-        if (matches.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        if (isHost) {
+            if (!hasMatches) {
+                // CASE 1: No matches yet -> Start Tournament
+                item {
+                    GeneratorCard(
+                        title = "Ready to Start?",
+                        subtitle = "Generate Round 1 to begin the tournament.",
+                        buttonText = "Generate Round 1",
+                        icon = Icons.Default.Casino,
+                        onClick = onGenerateMatches
                     )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "No matches generated yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                }
+            } else if (currentRoundFinished) {
+                // CASE 2: Round Finished -> Generate Next Round
+                // We show this button if we haven't played enough rounds yet
+                // For Swiss, we play 'roundsToPlay' rounds.
+                // We estimate current round by dividing matches by (Players/2)
+                val players = tournament.tournamentPlayers.size
+                val matchesPerRound = players / 2
+                val calculatedCurrentRound = matches.size / matchesPerRound
+
+                if (calculatedCurrentRound < tournament.roundsToPlay) {
+                    item {
+                        GeneratorCard(
+                            title = "Round Complete",
+                            subtitle = "Generate pairings for the next round based on current standings.",
+                            buttonText = "Generate Round ${calculatedCurrentRound + 1}",
+                            icon = Icons.Default.NextPlan,
+                            onClick = onGenerateMatches
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Generate a bracket to create matches",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                } else if (tournament.stageCount == 2 && tournament.currentStage == 1) {
+                    // Stage 1 Done -> Generate Stage 2
+                    item {
+                        GeneratorCard(
+                            title = "Group Stage Complete",
+                            subtitle = "Ready to generate the Final Stage bracket?",
+                            buttonText = "Generate Finals",
+                            icon = Icons.Default.NextPlan,
+                            onClick = onGenerateMatches
                         )
                     }
                 }
             }
+        } else if (matches.isEmpty()) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text("Waiting for host to start the tournament...", color = Color.Gray, textAlign = TextAlign.Center)
+                }
+            }
         }
 
-        // Upcoming Matches Section
+        // --- MATCH LIST ---
         if (upcomingMatches.isNotEmpty()) {
-            item {
-                Text(
-                    "Upcoming Matches (${upcomingMatches.size})",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            items(upcomingMatches) { match ->
-                MatchCard(match = match, onViewMatchClick = onViewMatchClick)
-            }
+            item { Text("Upcoming Matches", style = MaterialTheme.typography.titleLarge) }
+            items(upcomingMatches) { match -> MatchCard(match, onViewMatchClick) }
         }
 
-        // Completed Matches Section
         if (completedMatches.isNotEmpty()) {
-            item {
-                Text(
-                    "Completed Matches (${completedMatches.size})",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
-            }
-            items(completedMatches) { match ->
-                MatchCard(match = match, onViewMatchClick = onViewMatchClick)
+            item { Text("Completed", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp)) }
+            items(completedMatches) { match -> MatchCard(match, onViewMatchClick) }
+        }
+    }
+}
+
+@Composable
+fun GeneratorCard(
+    title: String,
+    subtitle: String,
+    buttonText: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onClick) {
+                Text(buttonText)
             }
         }
     }
@@ -206,13 +255,13 @@ fun MatchCard(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun MatchesTabPreview() {
-    BeybladeXTournamentManagerTheme {
-        MatchesTab(
-            matches = emptyList(),
-            onViewMatchClick = {}
-        )
-    }
-}
+//@Preview(showBackground = true)
+//@Composable
+//fun MatchesTabPreview() {
+//    BeybladeXTournamentManagerTheme {
+//        MatchesTab(
+//            matches = emptyList(),
+//            onViewMatchClick = {}
+//        )
+//    }
+//}

@@ -7,6 +7,7 @@ import com.google.android.gms.tasks.Tasks
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +94,31 @@ class TournamentDashboardViewModel(
             } catch (e: Exception) {
                 Log.e("DashboardVM", "Error fetching participants", e)
             }
+        }
+    }
+
+    fun generateMatches(tournament: Tournament) {
+        val currentParticipants = _participants.value
+        if (currentParticipants.isEmpty()) {
+            _error.value = "No participants loaded. Cannot generate matches."
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = matchRepository.generateMatchesForTournament(tournament, currentParticipants)
+
+            result.fold(
+                onSuccess = { count ->
+                    // Matches generated! The real-time listener will automatically update the list.
+                    // We just turn off loading.
+                    _isLoading.value = false
+                },
+                onFailure = { e ->
+                    _error.value = "Failed to generate matches: ${e.message}"
+                    _isLoading.value = false
+                }
+            )
         }
     }
 }

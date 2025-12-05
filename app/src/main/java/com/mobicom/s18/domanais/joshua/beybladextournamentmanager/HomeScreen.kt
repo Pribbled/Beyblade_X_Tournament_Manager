@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.cards.TournamentCard
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
@@ -42,7 +43,13 @@ fun HomeScreen(
         }
 
         val query = db.collection("tournaments")
-            .whereArrayContains("tournamentPlayers", userId)
+            .where(
+                Filter.or(
+                    Filter.equalTo("tournamentOwner", userId),
+                    Filter.arrayContains("tournamentPlayers", userId),
+                    Filter.arrayContains("tournamentJudges", userId)
+                )
+            )
 
         val listener = query.addSnapshotListener { snapshot, error ->
             if (error != null) {

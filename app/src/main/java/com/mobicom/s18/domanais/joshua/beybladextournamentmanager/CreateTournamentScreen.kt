@@ -42,6 +42,8 @@ fun CreateTournamentScreen(
     var selectedStage1Format by remember { mutableStateOf(groupStageOptions[0]) }
     var selectedStage2Format by remember { mutableStateOf(finalStageOptions[0]) }
 
+    var roundsToPlay by remember { mutableStateOf(1) }
+
     // Battle Rules
     val battleTypeOptions = listOf("3on3 Deck", "1on1 Standard", "5G Battle")
     var selectedBattleType by remember { mutableStateOf("3on3 Deck") } // Default per requirement
@@ -68,6 +70,14 @@ fun CreateTournamentScreen(
     val scope = rememberCoroutineScope()
     val auth = FirebaseModule.auth
     val db = FirebaseModule.db
+
+    LaunchedEffect(selectedStage1Format) {
+        if (selectedStage1Format == "Swiss System") {
+            roundsToPlay = 5
+        } else if (selectedStage1Format == "Round Robin") {
+            roundsToPlay = 1
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -128,21 +138,40 @@ fun CreateTournamentScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (stageCount == 1) {
-                    DropdownSelector(
-                        label = "Tournament Format",
-                        options = groupStageOptions,
-                        selectedOption = selectedStage1Format,
-                        onOptionSelected = { selectedStage1Format = it }
-                    )
-                } else {
-                    DropdownSelector(
-                        label = "Group Stage Format",
-                        options = groupStageOptions,
-                        selectedOption = selectedStage1Format,
-                        onOptionSelected = { selectedStage1Format = it }
-                    )
+                val label1 = if (stageCount == 1) "Tournament Format" else "Group Stage Format"
+                DropdownSelector(
+                    label = label1,
+                    options = groupStageOptions,
+                    selectedOption = selectedStage1Format,
+                    onOptionSelected = { selectedStage1Format = it }
+                )
+
+                // Specific Config for Round Robin / Swiss
+                if (selectedStage1Format == "Round Robin") {
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text("Matchups per Pair (Round Robin)", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = roundsToPlay.toFloat(),
+                        onValueChange = { roundsToPlay = it.toInt() },
+                        valueRange = 1f..5f,
+                        steps = 3
+                    )
+                    Text("Players face each other $roundsToPlay time(s)")
+                } else if (selectedStage1Format == "Swiss System") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Number of Swiss Rounds", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = roundsToPlay.toFloat(),
+                        onValueChange = { roundsToPlay = it.toInt() },
+                        valueRange = 3f..10f,
+                        steps = 6
+                    )
+                    Text("$roundsToPlay Rounds total")
+                }
+
+                // Stage 2 Config
+                if (stageCount == 2) {
+                    Spacer(modifier = Modifier.height(16.dp))
                     DropdownSelector(
                         label = "Final Stage Format",
                         options = finalStageOptions,
@@ -242,6 +271,8 @@ fun CreateTournamentScreen(
                             stageCount = stageCount,
                             stage1Format = selectedStage1Format,
                             stage2Format = if (stageCount == 2) selectedStage2Format else "",
+
+                            roundsToPlay = roundsToPlay,
 
                             // Battle Rules
                             battleType = selectedBattleType,
