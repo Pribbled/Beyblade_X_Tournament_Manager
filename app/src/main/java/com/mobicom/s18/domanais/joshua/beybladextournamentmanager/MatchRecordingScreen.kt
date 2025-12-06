@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchDetailsViewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchRecordingViewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.MatchUiState
@@ -63,6 +64,7 @@ fun MatchRecordingScreen(
 
     val matchState by viewModel.matchState.collectAsState()
     val uploadState by recordingViewModel.uploadState.collectAsState()
+    val tournamentState by viewModel.tournamentState.collectAsState()
 
     var hasCameraPermission by remember { mutableStateOf(false) }
     var hasAudioPermission by remember { mutableStateOf(false) }
@@ -154,6 +156,7 @@ fun MatchRecordingScreen(
             modifier = Modifier.align(Alignment.CenterStart),
             playerName = player1Name,
             playerScore = playerAScore,
+            scoringValues = tournamentState,
             onScoreUpdate = { points -> playerAScore += points },
             enabled = isRecording && !isProcessing
         )
@@ -163,6 +166,7 @@ fun MatchRecordingScreen(
             modifier = Modifier.align(Alignment.CenterEnd),
             playerName = player2Name,
             playerScore = playerBScore,
+            scoringValues = tournamentState,
             onScoreUpdate = { points -> playerBScore += points },
             enabled = isRecording && !isProcessing
         )
@@ -218,9 +222,15 @@ fun PlayerControls(
     modifier: Modifier = Modifier,
     playerName: String,
     playerScore: Int,
+    scoringValues: Tournament?,
     onScoreUpdate: (Int) -> Unit,
     enabled: Boolean
 ) {
+    val extremePoints = scoringValues?.scoringValueExtreme ?: 3
+    val burstPoints = scoringValues?.scoringValueBurst ?: 2
+    val overPoints = scoringValues?.scoringValueOver ?: 1
+    val spinPoints = scoringValues?.scoringValueSpin ?: 1
+
     Column(
         modifier = modifier.padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -230,10 +240,10 @@ fun PlayerControls(
         Text(text = "$playerScore", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
 
         val btnMod = Modifier.width(150.dp)
-        Button(onClick = { onScoreUpdate(3) }, modifier = btnMod, enabled = enabled) { Text("Extreme (3)") }
-        Button(onClick = { onScoreUpdate(2) }, modifier = btnMod, enabled = enabled) { Text("Burst (2)") }
-        Button(onClick = { onScoreUpdate(1) }, modifier = btnMod, enabled = enabled) { Text("Over (1)") }
-        Button(onClick = { onScoreUpdate(1) }, modifier = btnMod, enabled = enabled) { Text("Spin (1)") }
+        Button(onClick = { onScoreUpdate(extremePoints) }, modifier = btnMod, enabled = enabled) { Text("Extreme ($extremePoints)") }
+        Button(onClick = { onScoreUpdate(burstPoints) }, modifier = btnMod, enabled = enabled) { Text("Burst ($burstPoints)") }
+        Button(onClick = { onScoreUpdate(overPoints) }, modifier = btnMod, enabled = enabled) { Text("Over ($overPoints)") }
+        Button(onClick = { onScoreUpdate(spinPoints) }, modifier = btnMod, enabled = enabled) { Text("Spin ($spinPoints)") }
     }
 }
 

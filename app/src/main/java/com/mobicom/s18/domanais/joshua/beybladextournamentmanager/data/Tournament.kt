@@ -17,8 +17,13 @@ data class Tournament(
     val topXQualifiers: Int = 4,
 
     // --- Battle Rules ---
-    val battleType: String = "3on3 Deck", // Default Philippine Standard
-    val scoringSystem: String = "Standard (1-2-3)",
+    val battleType: String = "3on3 Deck",
+    val scoringSystem: String = "standard",
+    val scoringValueExtreme: Int = 3,
+    val scoringValueBurst: Int = 2,
+    val scoringValueOver: Int = 1,
+    val scoringValueSpin: Int = 1,
+    val lockMatchScoring: Boolean = true,
 
     // --- Ranking & Tie Breakers ---
     val rankingSystem: String = "Match Wins", // Default ranking metric

@@ -2,19 +2,25 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.RoundDetail
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * ViewModel for managing match details and real-time updates
  */
 class MatchDetailsViewModel(
-    private val repository: MatchRepository = MatchRepository()
+    private val repository: MatchRepository = MatchRepository(),
+    private val db: FirebaseFirestore = Firebase.firestore
 ) : ViewModel() {
 
     // UI State
@@ -27,6 +33,9 @@ class MatchDetailsViewModel(
 
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning: StateFlow<Boolean> = _isTimerRunning.asStateFlow()
+
+    private val _tournamentState = MutableStateFlow<Tournament?>(null)
+    val tournamentState: StateFlow<Tournament?> = _tournamentState.asStateFlow()
 
 
     /**
@@ -63,6 +72,7 @@ class MatchDetailsViewModel(
     fun listenToMatch(tournamentId: String, matchId: String) {
         viewModelScope.launch {
             _matchState.value = MatchUiState.Loading
+            loadTournament(tournamentId)
 
             try {
                 repository.getMatchDetails(tournamentId, matchId).collect { match ->
@@ -197,6 +207,17 @@ class MatchDetailsViewModel(
                 player1Score = player1Score,
                 player2Score = player2Score
             )
+        }
+    }
+
+    private fun loadTournament(tournamentId: String) {
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("tournaments").document(tournamentId).get().await()
+                _tournamentState.value = snapshot.toObject(Tournament::class.java)
+            } catch (_: Exception) {
+                _tournamentState.value = null
+            }
         }
     }
 }

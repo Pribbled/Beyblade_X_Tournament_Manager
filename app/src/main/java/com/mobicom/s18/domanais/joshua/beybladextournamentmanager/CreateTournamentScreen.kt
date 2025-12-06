@@ -287,6 +287,10 @@ fun CreateTournamentScreen(
                             return@launch
                         }
 
+                        // Scoring Logic
+                        val scoringKey = if (selectedScoringOption == "Standard") "standard" else "all_one"
+                        val scoringValues = if (scoringKey == "all_one") mapOf("extreme" to 1, "burst" to 1, "over" to 1, "spin" to 1) else mapOf("extreme" to 3, "burst" to 2, "over" to 1, "spin" to 1)
+
                         val tournament = Tournament(
                             uid = "",
                             tournamentOwner = auth.currentUser?.uid ?: "",
@@ -304,7 +308,12 @@ fun CreateTournamentScreen(
 
                             // Battle Rules
                             battleType = selectedBattleType,
-                            scoringSystem = selectedScoringOption,
+                            scoringSystem = scoringKey,
+                            scoringValueExtreme = scoringValues["extreme"] ?: 3,
+                            scoringValueBurst = scoringValues["burst"] ?: 2,
+                            scoringValueOver = scoringValues["over"] ?: 1,
+                            scoringValueSpin = scoringValues["spin"] ?: 1,
+                            lockMatchScoring = scoringKey == "standard",
 
                             // Tie Breakers
                             rankingSystem = selectedRankingSystem,
