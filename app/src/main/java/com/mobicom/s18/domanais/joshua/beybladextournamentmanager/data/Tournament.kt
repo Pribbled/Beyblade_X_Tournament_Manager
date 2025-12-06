@@ -37,6 +37,7 @@ data class Tournament(
     val publicVisibility: Boolean = false,
     val tournamentPlayers: List<String> = emptyList(),
     val tournamentJudges: List<String> = emptyList(),
+    val tournamentJudgesAlsoPlay: Boolean = false,
     val tournamentCode: String = generateTournamentCode(),
     val status: String = "upcoming",
     val startDate: String = "",

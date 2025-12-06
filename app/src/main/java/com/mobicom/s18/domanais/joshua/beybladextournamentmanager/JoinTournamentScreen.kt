@@ -97,6 +97,8 @@ fun JoinTournamentScreen(
 
                     val isJudge = tournament.tournamentJudges.contains(userId)
                     val isAlreadyPlayer = tournament.tournamentPlayers.contains(userId)
+                    val judgesAlsoPlay = tournament.tournamentJudgesAlsoPlay
+                    val isJoiningAsJudge = !isJudge && judgesAlsoPlay
 
                     if (isJudge) {
                         Toast.makeText(context, "Joining as Judge...", Toast.LENGTH_SHORT).show()
@@ -114,8 +116,12 @@ fun JoinTournamentScreen(
                                 Toast.LENGTH_SHORT
                             ).show()
                         } else {
-                            doc.reference.update("tournamentPlayers", FieldValue.arrayUnion(userId))
-                                .await()
+                            val judgeIdsToAdd = if (judgesAlsoPlay) tournament.tournamentJudges else emptyList()
+                            val playerUpdate = FieldValue.arrayUnion(*(listOf(userId) + judgeIdsToAdd).toTypedArray())
+                            doc.reference.update("tournamentPlayers", playerUpdate)
+                            if (!isJudge && isJoiningAsJudge) {
+                                doc.reference.update("tournamentJudges", FieldValue.arrayUnion(userId))
+                            }
 
                             db.collection("users").document(userId)
                                 .update("pastTournaments", FieldValue.arrayUnion(tournamentId))

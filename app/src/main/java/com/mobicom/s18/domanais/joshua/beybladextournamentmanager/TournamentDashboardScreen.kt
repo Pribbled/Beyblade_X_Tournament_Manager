@@ -55,8 +55,13 @@ fun TournamentDashboardScreen(
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     val currentUser = FirebaseModule.auth.currentUser
-    val isHost = tournament != null && currentUser != null && tournament!!.tournamentOwner == currentUser.uid
+    val isHost = tournament?.tournamentOwner == currentUser?.uid
     val isJudge = tournament?.tournamentJudges?.contains(currentUser?.uid) == true
+    val judgesAlsoPlay = tournament?.tournamentJudgesAlsoPlay == true
+    val effectivePlayers = remember(tournament?.tournamentPlayers, tournament?.tournamentJudges, judgesAlsoPlay) {
+        if (!judgesAlsoPlay) tournament?.tournamentPlayers.orEmpty()
+        else (tournament?.tournamentPlayers.orEmpty() + tournament?.tournamentJudges.orEmpty()).distinct()
+    }
 
     LaunchedEffect(tournamentId) {
         if (tournamentId == "preview1") {
@@ -145,19 +150,23 @@ fun TournamentDashboardScreen(
                 }
             } else if (tournament != null) {
                 when (selectedTabIndex) {
-                    0 -> OverviewTab(tournament = tournament!!, participants = participants)
+                    0 -> OverviewTab(
+                        tournament = tournament!!,
+                        participants = participants,
+                        finalBuilds = finalBuilds,
+                        isHostOrJudge = isHost || isJudge,
+                        judgesAlsoPlay = judgesAlsoPlay
+                    )
                     1 -> MatchesTab(
                         tournament = tournament!!,
                         matches = matches,
                         isHost = isHost,
                         onViewMatchClick = onViewMatchClick,
-                        onGenerateMatches = {
-                            val shouldAdvanceToFinals = tournament!!.stageCount == 2 && tournament!!.currentStage == 1 &&
-                                matches.isNotEmpty() && matches.all { it.status == "completed" }
-                            viewModel.generateMatches(tournament!!, advanceToFinals = shouldAdvanceToFinals)
-                        },
-                        currentUserId = currentUser?.uid,
-                        isJudge = isJudge
+                        onGenerateMatches = { viewModel.generateMatches(tournament!!) },
+                        participants = participants,
+                        finalBuilds = finalBuilds,
+                        isJudge = isJudge,
+                        judgesAlsoPlay = judgesAlsoPlay
                     )
                     2 -> BracketTab(
                         tournament = tournament!!,

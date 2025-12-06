@@ -48,7 +48,7 @@ fun CreateTournamentScreen(
     val battleTypeOptions = listOf("3on3 Deck", "1on1 Standard", "5G Battle")
     var selectedBattleType by remember { mutableStateOf("3on3 Deck") } // Default per requirement
 
-    val scoringOptions = listOf("Standard (1-2-2-3)", "WBO (1-2-2-3)", "Custom")
+    val scoringOptions = listOf("Standard", "All-One")
     var selectedScoringOption by remember { mutableStateOf(scoringOptions[0]) }
 
     // Tie Breakers
@@ -63,6 +63,7 @@ fun CreateTournamentScreen(
     // Toggles
     var allowSelfRegistration by remember { mutableStateOf(true) }
     var publicVisibility by remember { mutableStateOf(true) }
+    var judgesAlsoPlay by remember { mutableStateOf(false) }
 
     // Backend State
     var isLoading by remember { mutableStateOf(false) }
@@ -257,6 +258,14 @@ fun CreateTournamentScreen(
                     Text("Public Visibility")
                     Switch(checked = publicVisibility, onCheckedChange = { publicVisibility = it })
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Judges also play")
+                    Switch(checked = judgesAlsoPlay, onCheckedChange = { judgesAlsoPlay = it })
+                }
             }
 
             if (errorMessage != null) {
@@ -287,7 +296,7 @@ fun CreateTournamentScreen(
                         }
 
                         // Scoring Logic
-                        val scoringKey = if (selectedScoringOption == "Standard") "standard" else "all_one"
+                        val scoringKey = if (selectedScoringOption == "All-One") "all_one" else "standard"
                         val scoringValues = if (scoringKey == "all_one") mapOf("extreme" to 1, "burst" to 1, "over" to 1, "spin" to 1) else mapOf("extreme" to 3, "burst" to 2, "over" to 1, "spin" to 1)
 
                         val tournament = Tournament(
@@ -321,7 +330,8 @@ fun CreateTournamentScreen(
                             tieBreaker3 = tieBreaker3,
 
                             allowSelfRegister = allowSelfRegistration,
-                            publicVisibility = publicVisibility
+                            publicVisibility = publicVisibility,
+                            tournamentJudgesAlsoPlay = judgesAlsoPlay
                         )
 
                         try {

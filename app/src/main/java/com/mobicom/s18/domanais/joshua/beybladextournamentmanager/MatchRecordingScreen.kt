@@ -44,6 +44,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
+data class ScoreButton(val label: String, val delta: Int)
+
 @SuppressLint("MissingPermission")
 @Composable
 fun MatchRecordingScreen(
@@ -154,21 +156,27 @@ fun MatchRecordingScreen(
         // --- Player A Controls ---
         PlayerControls(
             modifier = Modifier.align(Alignment.CenterStart),
+            playerId = 1,
             playerName = player1Name,
             playerScore = playerAScore,
-            scoringValues = tournamentState,
-            onScoreUpdate = { points -> playerAScore += points },
-            enabled = isRecording && !isProcessing
+            onScoreChange = { player, delta ->
+                if (player == 1) playerAScore += delta
+            },
+            enabled = isRecording && !isProcessing,
+            scoringSystem = tournamentState?.scoringSystem ?: "standard"
         )
 
         // --- Player B Controls ---
         PlayerControls(
             modifier = Modifier.align(Alignment.CenterEnd),
+            playerId = 2,
             playerName = player2Name,
             playerScore = playerBScore,
-            scoringValues = tournamentState,
-            onScoreUpdate = { points -> playerBScore += points },
-            enabled = isRecording && !isProcessing
+            onScoreChange = { player, delta ->
+                if (player == 2) playerBScore += delta
+            },
+            enabled = isRecording && !isProcessing,
+            scoringSystem = tournamentState?.scoringSystem ?: "standard"
         )
 
         // --- Record Button ---
@@ -220,16 +228,27 @@ fun MatchRecordingScreen(
 @Composable
 fun PlayerControls(
     modifier: Modifier = Modifier,
+    playerId: Int,
     playerName: String,
     playerScore: Int,
-    scoringValues: Tournament?,
-    onScoreUpdate: (Int) -> Unit,
-    enabled: Boolean
+    onScoreChange: (Int, Int) -> Unit,
+    enabled: Boolean,
+    scoringSystem: String
 ) {
-    val extremePoints = scoringValues?.scoringValueExtreme ?: 3
-    val burstPoints = scoringValues?.scoringValueBurst ?: 2
-    val overPoints = scoringValues?.scoringValueOver ?: 1
-    val spinPoints = scoringValues?.scoringValueSpin ?: 1
+    val scoreButtons = remember(scoringSystem) {
+        if (scoringSystem == "all_one") {
+            listOf(
+                ScoreButton("+1", 1),
+                ScoreButton("-1", -1)
+            )
+        } else {
+            listOf(
+                ScoreButton("Burst +2", 2),
+                ScoreButton("Over +1", 1),
+                ScoreButton("Spin +1", 1)
+            )
+        }
+    }
 
     Column(
         modifier = modifier.padding(horizontal = 24.dp),
@@ -240,10 +259,15 @@ fun PlayerControls(
         Text(text = "$playerScore", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
 
         val btnMod = Modifier.width(150.dp)
-        Button(onClick = { onScoreUpdate(extremePoints) }, modifier = btnMod, enabled = enabled) { Text("Extreme ($extremePoints)") }
-        Button(onClick = { onScoreUpdate(burstPoints) }, modifier = btnMod, enabled = enabled) { Text("Burst ($burstPoints)") }
-        Button(onClick = { onScoreUpdate(overPoints) }, modifier = btnMod, enabled = enabled) { Text("Over ($overPoints)") }
-        Button(onClick = { onScoreUpdate(spinPoints) }, modifier = btnMod, enabled = enabled) { Text("Spin ($spinPoints)") }
+        scoreButtons.forEach { button ->
+            Button(
+                onClick = { onScoreChange(playerId, button.delta) },
+                modifier = btnMod,
+                enabled = enabled
+            ) {
+                Text(button.label)
+            }
+        }
     }
 }
 

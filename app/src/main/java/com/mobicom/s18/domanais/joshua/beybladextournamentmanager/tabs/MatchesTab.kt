@@ -40,7 +40,8 @@ fun MatchesTab(
     isJudge: Boolean = tournament.tournamentJudges.contains(currentUserId),
     participants: List<UserProfile> = emptyList(),
     finalBuilds: List<BeybladeBuild> = emptyList(),
-    onSubmitFinalBuild: (UserProfile) -> Unit = {}
+    onSubmitFinalBuild: (UserProfile) -> Unit = {},
+    judgesAlsoPlay: Boolean = tournament.tournamentJudgesAlsoPlay
 ) {
     // Separate matches by status
     val upcomingMatches = matches.filter {
@@ -138,7 +139,8 @@ fun MatchesTab(
                 MatchCard(
                     match = match,
                     canManage = isHost || isJudge,
-                    onViewMatchClick = onViewMatchClick
+                    onViewMatchClick = onViewMatchClick,
+                    judgesAlsoPlay = judgesAlsoPlay
                 )
             }
         }
@@ -149,7 +151,8 @@ fun MatchesTab(
                 MatchCard(
                     match = match,
                     canManage = isHost || isJudge,
-                    onViewMatchClick = onViewMatchClick
+                    onViewMatchClick = onViewMatchClick,
+                    judgesAlsoPlay = judgesAlsoPlay
                 )
             }
         }
@@ -189,7 +192,8 @@ fun GeneratorCard(
 fun MatchCard(
     match: Match,
     canManage: Boolean,
-    onViewMatchClick: (Match) -> Unit = {}
+    onViewMatchClick: (Match) -> Unit = {},
+    judgesAlsoPlay: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -299,6 +303,12 @@ fun MatchCard(
                     ) {
                         Text("View Match", style = MaterialTheme.typography.labelMedium)
                     }
+                } else if (judgesAlsoPlay && match.status != "completed") {
+                    Text(
+                        text = "Awaiting host/judge",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.Gray
+                    )
                 } else {
                     Text("Awaiting host", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
                 }

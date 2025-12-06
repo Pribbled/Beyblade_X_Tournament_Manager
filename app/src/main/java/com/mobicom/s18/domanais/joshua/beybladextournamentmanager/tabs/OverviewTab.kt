@@ -30,7 +30,8 @@ fun OverviewTab(
     participants: List<UserProfile> = emptyList(),
     finalBuilds: List<BeybladeBuild> = emptyList(),
     isHostOrJudge: Boolean = false,
-    onSubmitFinalBuild: (UserProfile) -> Unit = {}
+    onSubmitFinalBuild: (UserProfile) -> Unit = {},
+    judgesAlsoPlay: Boolean = tournament.tournamentJudgesAlsoPlay
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -127,7 +128,12 @@ fun OverviewTab(
                 }
             }
         } else {
-            itemsIndexed(participants) { index, player ->
+            val displayedParticipants = if (judgesAlsoPlay) {
+                participants + tournament.tournamentJudges.map { judgeId -> participants.find { it.uid == judgeId } }.filterNotNull()
+            } else {
+                participants
+            }
+            itemsIndexed(displayedParticipants.distinctBy { it.uid }) { index, player ->
                 ParticipantRow(index + 1, player)
             }
         }
@@ -142,7 +148,8 @@ fun OverviewTab(
                         qualifiers = qualifiers,
                         finalBuilds = finalBuilds,
                         isHostOrJudge = isHostOrJudge,
-                        onSubmitBuild = onSubmitFinalBuild
+                        onSubmitBuild = onSubmitFinalBuild,
+                        judgesAlsoPlay = judgesAlsoPlay
                     )
                 }
             }
@@ -352,12 +359,16 @@ fun QualifiedFinalistSection(
     qualifiers: List<UserProfile>,
     finalBuilds: List<BeybladeBuild>,
     isHostOrJudge: Boolean,
-    onSubmitBuild: (UserProfile) -> Unit
+    onSubmitBuild: (UserProfile) -> Unit,
+    judgesAlsoPlay: Boolean
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Finalists", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("Top $qualifierCount players must submit final builds before finals start.", color = Color.Gray)
         QualifiedFinalistList(qualifiers, finalBuilds, qualifierCount, isHostOrJudge, onSubmitBuild)
+        if (judgesAlsoPlay) {
+            Text("Judges are also competing in this stage.", color = Color.Gray)
+        }
     }
 }
 
