@@ -155,6 +155,7 @@ fun MatchDetailsScreen(
 ) {
     // Collect UI state from ViewModel
     val matchState by viewModel.matchState.collectAsState()
+    val isHostOrJudge by viewModel.isHostOrJudge.collectAsState()
     var showScoreDialog by rememberSaveable { mutableStateOf(false) }
     var player1ScoreInput by rememberSaveable { mutableStateOf("") }
     var player2ScoreInput by rememberSaveable { mutableStateOf("") }
@@ -234,6 +235,7 @@ fun MatchDetailsScreen(
             is MatchUiState.Success -> {
                 MatchDetailsContent(
                     match = state.match,
+                    canManageMatch = isHostOrJudge,
                     onEditScore = { openScoreDialog(state.match) },
                     onRecord = onRecord,
                     modifier = Modifier.padding(paddingValues)
@@ -311,6 +313,7 @@ fun EditScoreDialog(
 @Composable
 fun MatchDetailsContent(
     match: Match,
+    canManageMatch: Boolean,
     onEditScore: () -> Unit,
     onRecord: () -> Unit,
     modifier: Modifier = Modifier
@@ -389,27 +392,29 @@ fun MatchDetailsContent(
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Button(
-                    onClick = onRecord,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Text("Start Match", style = MaterialTheme.typography.titleMedium)
-                }
+                if (canManageMatch) {
+                    Button(
+                        onClick = onRecord,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text("Start Match", style = MaterialTheme.typography.titleMedium)
+                    }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = onEditScore,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Text("Edit Score")
+                    Button(
+                        onClick = onEditScore,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text("Edit Score")
+                    }
                 }
-             }
-         }
+            }
+        }
 
         item { Spacer(modifier = Modifier.height(12.dp)) }
 
@@ -461,6 +466,7 @@ fun MatchDetailsScreenPreview() {
     Column {
         MatchDetailsContent(
             match = sampleMatch,
+            canManageMatch = true,
             onEditScore = { previewScoresVisible = true },
             onRecord = {}
         )

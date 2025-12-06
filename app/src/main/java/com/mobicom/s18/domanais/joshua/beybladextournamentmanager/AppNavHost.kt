@@ -118,9 +118,7 @@ fun AppNavHost(){
             TournamentDashboardScreen(
                 tournamentId = tournamentId,
                 onBackClick = {
-                    navController.navigate("home") {
-                        popUpTo("home") { inclusive = true }
-                    }
+                    navController.popBackStack()
                 },
                 onViewMatchClick = { match ->
                     // Navigate to match details with proper parameters

@@ -17,8 +17,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.BeybladeBuild
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 /**
@@ -29,10 +32,15 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 @Composable
 fun MatchesTab(
     tournament: Tournament,
-    matches: List<Match>, // Accepts list directly from ViewModel
-    isHost: Boolean = false, // Check if current user is owner
+    matches: List<Match>,
+    isHost: Boolean = false,
     onViewMatchClick: (Match) -> Unit = {},
-    onGenerateMatches: () -> Unit = {}
+    onGenerateMatches: () -> Unit = {},
+    currentUserId: String? = FirebaseModule.auth.currentUser?.uid,
+    isJudge: Boolean = tournament.tournamentJudges.contains(currentUserId),
+    participants: List<UserProfile> = emptyList(),
+    finalBuilds: List<BeybladeBuild> = emptyList(),
+    onSubmitFinalBuild: (UserProfile) -> Unit = {}
 ) {
     // Separate matches by status
     val upcomingMatches = matches.filter {
@@ -48,6 +56,12 @@ fun MatchesTab(
     val players = tournament.tournamentPlayers.size
     val matchesPerRound = (players + 1) / 2
     val calculatedCurrentRound = if (matchesPerRound > 0) matches.size / matchesPerRound else 0
+
+    // Check if all required final builds are submitted for the qualifiers
+    val qualifiers = participants.sortedBy { it.rank }.take(tournament.topXQualifiers)
+    val allFinalBuildsSubmitted = qualifiers.isNotEmpty() && qualifiers.all { qualifier ->
+        finalBuilds.any { build -> build.playerId == qualifier.uid }
+    }
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -73,15 +87,34 @@ fun MatchesTab(
                 val areRoundsDone = calculatedCurrentRound >= tournament.roundsToPlay
 
                 if (isStage1Done && (areRoundsDone || tournament.stage1Format == "Single Elimination")) {
+                    val subtitleText = if (qualifiers.isEmpty()) {
+                        "Waiting for standings..."
+                    } else if (!allFinalBuildsSubmitted) {
+                        "Collect final builds from qualifiers before starting finals."
+                    } else {
+                        "Calculate standings and generate the Final Bracket?"
+                    }
                     // CONDITION: Stage 1 is totally finished. Time for Stage 2.
                     item {
                         GeneratorCard(
                             title = "Group Stage Complete",
-                            subtitle = "Calculate standings and generate the Final Bracket?",
+                            subtitle = subtitleText,
                             buttonText = "Start Finals",
                             icon = Icons.Default.EmojiEvents,
-                            onClick = onGenerateMatches
+                            onClick = onGenerateMatches,
+                            enabled = qualifiers.isNotEmpty() && allFinalBuildsSubmitted
                         )
+                    }
+
+                    if ((isHost || isJudge) && qualifiers.isNotEmpty() && !allFinalBuildsSubmitted) {
+                        item {
+                            QualifiedFinalistList(
+                                qualifiers = qualifiers,
+                                finalBuilds = finalBuilds,
+                                callToAction = "Submit Final Build",
+                                onSubmit = onSubmitFinalBuild
+                            )
+                        }
                     }
                 } else if (calculatedCurrentRound < tournament.roundsToPlay && (tournament.stage1Format == "Swiss System" || tournament.stage1Format == "Round Robin")) {
                     // CONDITION: Generate Next Round (Swiss/RR)
@@ -101,12 +134,24 @@ fun MatchesTab(
         // --- MATCH LIST ---
         if (upcomingMatches.isNotEmpty()) {
             item { Text("Upcoming Matches", style = MaterialTheme.typography.titleLarge) }
-            items(upcomingMatches) { match -> MatchCard(match, onViewMatchClick) }
+            items(upcomingMatches) { match ->
+                MatchCard(
+                    match = match,
+                    canManage = isHost || isJudge,
+                    onViewMatchClick = onViewMatchClick
+                )
+            }
         }
 
         if (completedMatches.isNotEmpty()) {
             item { Text("Completed", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp)) }
-            items(completedMatches) { match -> MatchCard(match, onViewMatchClick) }
+            items(completedMatches) { match ->
+                MatchCard(
+                    match = match,
+                    canManage = isHost || isJudge,
+                    onViewMatchClick = onViewMatchClick
+                )
+            }
         }
     }
 }
@@ -117,7 +162,8 @@ fun GeneratorCard(
     subtitle: String,
     buttonText: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -132,7 +178,7 @@ fun GeneratorCard(
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(subtitle, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onClick) {
+            Button(onClick = onClick, enabled = enabled) {
                 Text(buttonText)
             }
         }
@@ -142,6 +188,7 @@ fun GeneratorCard(
 @Composable
 fun MatchCard(
     match: Match,
+    canManage: Boolean,
     onViewMatchClick: (Match) -> Unit = {}
 ) {
     Card(
@@ -233,18 +280,70 @@ fun MatchCard(
 
                 // Score or Action Button
                 if (match.status == "completed") {
-                    Text(
-                        text = "${match.player1Score} - ${match.player2Score}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
+                    if (canManage) {
+                        Button(onClick = { onViewMatchClick(match) }, modifier = Modifier.height(36.dp)) {
+                            Text("Edit Score", style = MaterialTheme.typography.labelMedium)
+                        }
+                    } else {
+                        Text(
+                            text = "${match.player1Score} - ${match.player2Score}",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else if (canManage) {
                     Button(
                         onClick = { onViewMatchClick(match) },
                         modifier = Modifier.height(36.dp)
                     ) {
                         Text("View Match", style = MaterialTheme.typography.labelMedium)
+                    }
+                } else {
+                    Text("Awaiting host", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QualifiedFinalistList(
+    qualifiers: List<UserProfile>,
+    finalBuilds: List<BeybladeBuild>,
+    callToAction: String,
+    onSubmit: (UserProfile) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Finalists Pending Builds",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        qualifiers.forEach { qualifier ->
+            val submitted = finalBuilds.any { it.playerId == qualifier.uid }
+            Card {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(qualifier.bladerName.ifBlank { qualifier.uid }, fontWeight = FontWeight.Bold)
+                        Text(if (submitted) "Build submitted" else "Waiting for submission", color = if (submitted) Color(0xFF2E7D32) else Color.Gray)
+                    }
+                    if (!submitted) {
+                        TextButton(onClick = { onSubmit(qualifier) }) {
+                            Text(callToAction)
+                        }
                     }
                 }
             }

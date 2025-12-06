@@ -36,11 +36,10 @@ fun CreateTournamentScreen(
     var stageCount by remember { mutableStateOf(1) } // 1 or 2
 
     // Format Options
-    val groupStageOptions = listOf("Round Robin", "Swiss System", "Snake Draft", "Single Elimination", "Double Elimination")
-    val finalStageOptions = listOf("Single Elimination", "Double Elimination", "Page Playoff") // Usually cut to top X
+    val stageFormatOptions = listOf("Round Robin", "Swiss System", "Single Elimination")
 
-    var selectedStage1Format by remember { mutableStateOf(groupStageOptions[0]) }
-    var selectedStage2Format by remember { mutableStateOf(finalStageOptions[0]) }
+    var selectedStage1Format by remember { mutableStateOf(stageFormatOptions[0]) }
+    var selectedStage2Format by remember { mutableStateOf(stageFormatOptions[2]) }
 
     var roundsToPlay by remember { mutableStateOf(1) }
     var topXQualifiers by remember { mutableStateOf(4) }
@@ -142,7 +141,7 @@ fun CreateTournamentScreen(
                 val label1 = if (stageCount == 1) "Tournament Format" else "Group Stage Format"
                 DropdownSelector(
                     label = label1,
-                    options = groupStageOptions,
+                    options = stageFormatOptions,
                     selectedOption = selectedStage1Format,
                     onOptionSelected = { selectedStage1Format = it }
                 )
@@ -180,7 +179,7 @@ fun CreateTournamentScreen(
 
                     DropdownSelector(
                         label = "Final Stage Format",
-                        options = finalStageOptions,
+                        options = stageFormatOptions,
                         selectedOption = selectedStage2Format,
                         onOptionSelected = { selectedStage2Format = it }
                     )

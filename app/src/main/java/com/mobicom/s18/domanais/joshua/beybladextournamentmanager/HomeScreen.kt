@@ -18,6 +18,7 @@ import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.cards.TournamentCard
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,18 +32,47 @@ fun HomeScreen(
     val auth = FirebaseModule.auth
     val db = FirebaseModule.db
 
+    var rawTournaments by remember { mutableStateOf<List<Tournament>>(emptyList()) }
     var tournaments by remember { mutableStateOf<List<Tournament>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val userId = FirebaseModule.auth.currentUser?.uid
+    var pastTournaments by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    LaunchedEffect(Unit) {
-        val userId = auth.currentUser?.uid
+    fun refreshVisible() {
+        tournaments = rawTournaments.filter { tour ->
+            pastTournaments.isEmpty() || tour.uid in pastTournaments
+        }.sortedWith(
+            compareBy<Tournament>(
+                { it.status == "completed" },
+                { it.status == "upcoming" }
+            )
+        )
+    }
+
+    DisposableEffect(userId) {
         if (userId == null) {
+            rawTournaments = emptyList()
+            pastTournaments = emptySet()
+            refreshVisible()
             isLoading = false
-            return@LaunchedEffect
+            errorMessage = "Please log in to view tournaments."
+            return@DisposableEffect onDispose {}
         }
 
-        val query = db.collection("tournaments")
+        val profileRegistration = db.collection("users").document(userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("HomeScreen", "Profile listen failed", error)
+                    errorMessage = "Error loading profile: ${error.message}"
+                    return@addSnapshotListener
+                }
+                val profile = snapshot?.toObject(UserProfile::class.java)
+                pastTournaments = profile?.pastTournaments?.toSet().orEmpty()
+                refreshVisible()
+            }
+
+        val tournamentRegistration = db.collection("tournaments")
             .where(
                 Filter.or(
                     Filter.equalTo("tournamentOwner", userId),
@@ -50,25 +80,25 @@ fun HomeScreen(
                     Filter.arrayContains("tournamentJudges", userId)
                 )
             )
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("HomeScreen", "Listen failed", error)
+                    errorMessage = "Error loading tournaments: ${error.message}"
+                    isLoading = false
+                    return@addSnapshotListener
+                }
 
-        val listener = query.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("HomeScreen", "Listen failed", error)
-                errorMessage = "Error loading tournaments: ${error.message}"
+                rawTournaments = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(Tournament::class.java)?.copy(uid = doc.id)
+                }.orEmpty()
+                refreshVisible()
                 isLoading = false
-                return@addSnapshotListener
+                errorMessage = null
             }
 
-            if (snapshot != null) {
-                val fetchedList = snapshot.toObjects(Tournament::class.java)
-
-                tournaments = fetchedList.sortedWith(compareBy(
-                    { it.status == "completed" },
-                    { it.status == "upcoming" }
-                ))
-
-                isLoading = false
-            }
+        onDispose {
+            profileRegistration.remove()
+            tournamentRegistration.remove()
         }
     }
 

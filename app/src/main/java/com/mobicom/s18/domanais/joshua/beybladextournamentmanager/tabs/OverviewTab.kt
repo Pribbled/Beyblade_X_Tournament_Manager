@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.BeybladeBuild
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
@@ -26,7 +27,10 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.Beybl
 @Composable
 fun OverviewTab(
     tournament: Tournament,
-    participants: List<UserProfile> = emptyList()
+    participants: List<UserProfile> = emptyList(),
+    finalBuilds: List<BeybladeBuild> = emptyList(),
+    isHostOrJudge: Boolean = false,
+    onSubmitFinalBuild: (UserProfile) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -125,6 +129,22 @@ fun OverviewTab(
         } else {
             itemsIndexed(participants) { index, player ->
                 ParticipantRow(index + 1, player)
+            }
+        }
+
+        // Qualified Finalist Section (conditionally visible)
+        if (tournament.stageCount == 2 && tournament.currentStage == 1 && participants.isNotEmpty()) {
+            val qualifiers = participants.sortedBy { it.rank }.take(tournament.topXQualifiers)
+            if (qualifiers.isNotEmpty()) {
+                item {
+                    QualifiedFinalistSection(
+                        qualifierCount = tournament.topXQualifiers,
+                        qualifiers = qualifiers,
+                        finalBuilds = finalBuilds,
+                        isHostOrJudge = isHostOrJudge,
+                        onSubmitBuild = onSubmitFinalBuild
+                    )
+                }
             }
         }
 
@@ -321,6 +341,75 @@ fun ParticipantRow(index: Int, player: UserProfile) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun QualifiedFinalistSection(
+    qualifierCount: Int,
+    qualifiers: List<UserProfile>,
+    finalBuilds: List<BeybladeBuild>,
+    isHostOrJudge: Boolean,
+    onSubmitBuild: (UserProfile) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Finalists", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("Top $qualifierCount players must submit final builds before finals start.", color = Color.Gray)
+        QualifiedFinalistList(qualifiers, finalBuilds, qualifierCount, isHostOrJudge, onSubmitBuild)
+    }
+}
+
+@Composable
+fun QualifiedFinalistList(
+    qualifiers: List<UserProfile>,
+    finalBuilds: List<BeybladeBuild>,
+    qualifierCount: Int,
+    isHostOrJudge: Boolean,
+    onSubmitBuild: (UserProfile) -> Unit
+) {
+    if (qualifiers.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        qualifiers.forEach { player ->
+            val hasSubmitted = finalBuilds.any { it.playerId == player.uid }
+            QualifiedPlayerRow(
+                player = player,
+                hasSubmitted = hasSubmitted,
+                showSubmitButton = isHostOrJudge && !hasSubmitted,
+                onSubmitClick = { onSubmitBuild(player) }
+            )
+        }
+    }
+}
+
+@Composable
+fun QualifiedPlayerRow(
+    player: UserProfile,
+    hasSubmitted: Boolean,
+    showSubmitButton: Boolean,
+    onSubmitClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(player.bladerName.ifBlank { "Unnamed Blader" }, fontWeight = FontWeight.Bold)
+                Text(if (hasSubmitted) "Build Submitted" else "Awaiting Submission", color = if (hasSubmitted) Color(0xFF2E7D32) else Color.Gray)
+            }
+            if (showSubmitButton) {
+                Button(onClick = onSubmitClick) {
+                    Text("Submit Final Build")
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.BeybladeBuild
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,10 @@ class TournamentDashboardViewModel(
     // --- Participants State ---
     private val _participants = MutableStateFlow<List<UserProfile>>(emptyList())
     val participants: StateFlow<List<UserProfile>> = _participants.asStateFlow()
+
+    // --- Final Builds State ---
+    private val _finalBuilds = MutableStateFlow<List<BeybladeBuild>>(emptyList())
+    val finalBuilds: StateFlow<List<BeybladeBuild>> = _finalBuilds.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -93,6 +98,17 @@ class TournamentDashboardViewModel(
                 _participants.value = profiles
             } catch (e: Exception) {
                 Log.e("DashboardVM", "Error fetching participants", e)
+            }
+        }
+    }
+
+    /**
+     * Observe final builds for a specific tournament.
+     */
+    fun observeFinalBuilds(tournamentId: String) {
+        viewModelScope.launch {
+            matchRepository.listenToFinalBuilds(tournamentId).collect { builds ->
+                _finalBuilds.value = builds
             }
         }
     }

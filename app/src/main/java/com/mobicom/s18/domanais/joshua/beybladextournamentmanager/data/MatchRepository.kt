@@ -847,38 +847,24 @@ class MatchRepository(
      * @return Flow emitting lists of BeybladeBuild objects on every update
      */
     fun listenToFinalBuilds(tournamentId: String): Flow<List<BeybladeBuild>> = callbackFlow {
-        var listenerRegistration: ListenerRegistration? = null
-
-        try {
-            listenerRegistration = db.collection(TOURNAMENTS_COLLECTION)
-                .document(tournamentId)
-                .collection(FINAL_BUILDS_COLLECTION)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        println("Error listening to final builds: ${error.message}")
-                        trySend(emptyList())
-                        return@addSnapshotListener
-                    }
-
-                    if (snapshot != null) {
-                        val builds = snapshot.documents
-                            .mapNotNull { it.toObject(BeybladeBuild::class.java) }
-                            .sortedBy { it.playerName }
-
-                        trySend(builds)
-                    } else {
-                        trySend(emptyList())
-                    }
+        val registration = db.collection(TOURNAMENTS_COLLECTION)
+            .document(tournamentId)
+            .collection(FINAL_BUILDS_COLLECTION)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    println("Error listening to final builds: ${error.message}")
+                    trySend(emptyList())
+                    return@addSnapshotListener
                 }
+                val builds = snapshot?.documents
+                    ?.mapNotNull { it.toObject(BeybladeBuild::class.java) }
+                    ?.sortedBy { it.playerName }
+                    ?: emptyList()
+                trySend(builds)
+            }
 
-            awaitClose {
-                listenerRegistration?.remove()
-            }
-        } catch (e: Exception) {
-            trySend(emptyList())
-            awaitClose {
-                listenerRegistration?.remove()
-            }
+        awaitClose {
+            registration.remove()
         }
     }
 
@@ -1088,6 +1074,20 @@ class MatchRepository(
 
             // If Final Stage, we MUST select qualifiers based on Stage 1 results
             val playersForGeneration = if (isFinalStage) {
+                val finalBuilds = db.collection(TOURNAMENTS_COLLECTION)
+                    .document(tournament.uid)
+                    .collection(FINAL_BUILDS_COLLECTION)
+                    .get()
+                    .await()
+                    .toObjects(BeybladeBuild::class.java)
+
+                val missingBuilds = participants.sortedBy { it.rank }.take(tournament.topXQualifiers).filterNot { qualifier ->
+                    finalBuilds.any { build -> build.playerId == qualifier.uid }
+                }
+                if (missingBuilds.isNotEmpty()) {
+                    return Result.failure(Exception("Final builds pending for ${missingBuilds.size} qualifier(s)."))
+                }
+
                 // 1. Fetch Stage 1 Matches
                 val stage1Matches = db.collection(TOURNAMENTS_COLLECTION)
                     .document(tournament.uid)

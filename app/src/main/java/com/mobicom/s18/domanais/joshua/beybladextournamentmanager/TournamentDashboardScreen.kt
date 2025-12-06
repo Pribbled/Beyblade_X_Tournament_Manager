@@ -56,6 +56,7 @@ fun TournamentDashboardScreen(
 
     val currentUser = FirebaseModule.auth.currentUser
     val isHost = tournament != null && currentUser != null && tournament!!.tournamentOwner == currentUser.uid
+    val isJudge = tournament?.tournamentJudges?.contains(currentUser?.uid) == true
 
     LaunchedEffect(tournamentId) {
         if (tournamentId == "preview1") {
@@ -79,10 +80,12 @@ fun TournamentDashboardScreen(
             .addOnFailureListener { isLoading = false }
 
         viewModel.loadMatches(tournamentId)
+        viewModel.observeFinalBuilds(tournamentId)
     }
 
     val matches by viewModel.matches.collectAsState()
     val participants by viewModel.participants.collectAsState()
+    val finalBuilds by viewModel.finalBuilds.collectAsState()
 
     // QR Code Dialog
     if (showShareDialog && tournament != null) {
@@ -152,7 +155,9 @@ fun TournamentDashboardScreen(
                             val shouldAdvanceToFinals = tournament!!.stageCount == 2 && tournament!!.currentStage == 1 &&
                                 matches.isNotEmpty() && matches.all { it.status == "completed" }
                             viewModel.generateMatches(tournament!!, advanceToFinals = shouldAdvanceToFinals)
-                        }
+                        },
+                        currentUserId = currentUser?.uid,
+                        isJudge = isJudge
                     )
                     2 -> BracketTab(
                         tournament = tournament!!,

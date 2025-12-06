@@ -2,9 +2,11 @@ package com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.MatchRepository
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.RoundDetail
@@ -22,6 +24,9 @@ class MatchDetailsViewModel(
     private val repository: MatchRepository = MatchRepository(),
     private val db: FirebaseFirestore = Firebase.firestore
 ) : ViewModel() {
+    private val currentUserId: String? = FirebaseModule.auth.currentUser?.uid
+    private val _isHostOrJudge = MutableStateFlow(false)
+    val isHostOrJudge: StateFlow<Boolean> = _isHostOrJudge.asStateFlow()
 
     // UI State
     private val _matchState = MutableStateFlow<MatchUiState>(MatchUiState.Loading)
@@ -79,6 +84,7 @@ class MatchDetailsViewModel(
                     if (match != null) {
                         _matchState.value = MatchUiState.Success(match)
                         _elapsedTime.value = match.elapsedSeconds
+                        resolvePermissions(match.tournamentId)
                     } else {
                         _matchState.value = MatchUiState.Error("Match not found")
                     }
@@ -87,6 +93,7 @@ class MatchDetailsViewModel(
                 _matchState.value = MatchUiState.Error(
                     e.message ?: "Failed to listen to match updates"
                 )
+                _isHostOrJudge.value = false
             }
         }
     }
@@ -215,8 +222,28 @@ class MatchDetailsViewModel(
             try {
                 val snapshot = db.collection("tournaments").document(tournamentId).get().await()
                 _tournamentState.value = snapshot.toObject(Tournament::class.java)
+                resolvePermissions(tournamentId)
             } catch (_: Exception) {
                 _tournamentState.value = null
+                _isHostOrJudge.value = false
+            }
+        }
+    }
+
+    private fun resolvePermissions(tournamentId: String) {
+        if (currentUserId == null) {
+            _isHostOrJudge.value = false
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("tournaments").document(tournamentId).get().await()
+                val tournament = snapshot.toObject(Tournament::class.java)
+                val isOwner = tournament?.tournamentOwner == currentUserId
+                val isJudge = tournament?.tournamentJudges?.contains(currentUserId) == true
+                _isHostOrJudge.value = isOwner || isJudge
+            } catch (_: Exception) {
+                _isHostOrJudge.value = false
             }
         }
     }
