@@ -6,23 +6,59 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.BuildSubmissionState
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.FinalRoundBuildViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinalRoundBuildSubmissionScreen(
+    tournamentId: String = "tournament_001",
+    playerId: String = "player_001",
     playerName: String = "Tyson Granger",
+    viewModel: FinalRoundBuildViewModel = viewModel(),
     onBackClick: () -> Unit = {},
-    onSubmitClick: (List<BuildConfig>) -> Unit = {}
+    onSubmitSuccess: () -> Unit = {}
 ) {
     // State for player's builds (3 builds per player)
     var playerBuilds by remember { mutableStateOf(generateInitialBuilds()) }
+
+    // Observe submission state
+    val submissionState by viewModel.submissionState.collectAsState()
+
+    // Show toast/snackbar for submission state
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Handle submission state changes
+    LaunchedEffect(submissionState) {
+        when (submissionState) {
+            is BuildSubmissionState.Success -> {
+                snackbarHostState.showSnackbar(
+                    message = (submissionState as BuildSubmissionState.Success).message,
+                    duration = SnackbarDuration.Short
+                )
+                viewModel.resetSubmissionState()
+                // Navigate back on success
+                onSubmitSuccess()
+            }
+            is BuildSubmissionState.Error -> {
+                snackbarHostState.showSnackbar(
+                    message = (submissionState as BuildSubmissionState.Error).message,
+                    duration = SnackbarDuration.Long
+                )
+                viewModel.resetSubmissionState()
+            }
+            else -> { /* Do nothing */ }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -42,7 +78,8 @@ fun FinalRoundBuildSubmissionScreen(
                     navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -83,12 +120,33 @@ fun FinalRoundBuildSubmissionScreen(
 
             // Submit button
             Button(
-                onClick = { onSubmitClick(playerBuilds) },
+                onClick = {
+                    // Convert BuildConfig list to Triple list for ViewModel
+                    val buildsToSubmit = playerBuilds.map { build ->
+                        Triple(build.layer, build.disc, build.bit)
+                    }
+
+                    // Call ViewModel to submit builds
+                    viewModel.submitMultipleBuilds(
+                        tournamentId = tournamentId,
+                        playerId = playerId,
+                        playerName = playerName,
+                        builds = buildsToSubmit
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(56.dp),
+                enabled = submissionState !is BuildSubmissionState.Loading
             ) {
-                Text("Submit Builds")
+                if (submissionState is BuildSubmissionState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Submit Builds")
+                }
             }
         }
     }
@@ -175,7 +233,7 @@ fun PartDropdown(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor()
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
             )
 
             ExposedDropdownMenu(

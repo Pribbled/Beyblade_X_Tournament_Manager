@@ -1,56 +1,137 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.graphics.Bitmap
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.firestore.FirebaseFirestore
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
-import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.OverviewTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
-
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.viewmodel.TournamentDashboardViewModel
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.util.QRCodeUtils
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.FirebaseModule
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentDashboardScreen(
-    tournament: Tournament = dummyTournaments.first(), // Use a dummy tournament for preview
+    tournamentId: String = "preview1",
     onBackClick: () -> Unit = {} ,
-    onViewMatchClick: (Match) -> Unit = {}
+    onViewMatchClick: (Match) -> Unit = {},
+    onSubmitFinalBuild: (String, String, String) -> Unit = { _, _, _ -> },
+    viewModel: TournamentDashboardViewModel = viewModel()
 ) {
-    var selectedTabIndex by remember { mutableStateOf(0) }
+    val db = FirebaseFirestore.getInstance()
+    var tournament by remember { mutableStateOf<Tournament?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     val tabs = listOf("Overview", "Matches", "Bracket", "Metrics")
+
+    // QR Code Dialog State
+    var showShareDialog by remember { mutableStateOf(false) }
+    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val currentUser = FirebaseModule.auth.currentUser
+    val isHost = tournament?.tournamentOwner == currentUser?.uid
+    val isJudge = tournament?.tournamentJudges?.contains(currentUser?.uid) == true
+    val judgesAlsoPlay = tournament?.tournamentJudgesAlsoPlay == true
+    val effectivePlayers = remember(tournament?.tournamentPlayers, tournament?.tournamentJudges, judgesAlsoPlay) {
+        if (!judgesAlsoPlay) tournament?.tournamentPlayers.orEmpty()
+        else (tournament?.tournamentPlayers.orEmpty() + tournament?.tournamentJudges.orEmpty()).distinct()
+    }
+
+    LaunchedEffect(tournamentId) {
+        if (tournamentId == "preview1") {
+            isLoading = false
+            return@LaunchedEffect
+        }
+
+        db.collection("tournaments").document(tournamentId).get()
+            .addOnSuccessListener { document ->
+                val fetchedTournament = document.toObject(Tournament::class.java)
+                tournament = fetchedTournament
+
+                if (fetchedTournament != null) {
+                    viewModel.loadParticipants(fetchedTournament.tournamentPlayers)
+                    // Generate QR Code
+                    qrBitmap = QRCodeUtils.generateQRCode(fetchedTournament.tournamentCode)
+                }
+
+                isLoading = false
+            }
+            .addOnFailureListener { isLoading = false }
+
+        viewModel.loadMatches(tournamentId)
+        viewModel.observeFinalBuilds(tournamentId)
+    }
+
+    val matches by viewModel.matches.collectAsState()
+    val participants by viewModel.participants.collectAsState()
+    val finalBuilds by viewModel.finalBuilds.collectAsState()
+
+    // QR Code Dialog
+    if (showShareDialog && tournament != null) {
+        ShareTournamentDialog(
+            tournamentName = tournament!!.name,
+            tournamentCode = tournament!!.tournamentCode,
+            qrBitmap = qrBitmap,
+            onDismiss = { showShareDialog = false }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = tournament.name,
+                        text = tournament?.name ?: "Loading...",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // Share Button
+                    if (tournament != null) {
+                        IconButton(onClick = { showShareDialog = true }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share Tournament Code")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
@@ -61,38 +142,136 @@ fun TournamentDashboardScreen(
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
                 tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
-                    )
+                    Tab(selected = selectedTabIndex == index, onClick = { selectedTabIndex = index }, text = { Text(title) })
                 }
             }
 
-            // Content for each tab
-            when (selectedTabIndex) {
-                0 -> OverviewTab(tournament)
-                1 -> MatchesTab(onViewMatchClick = onViewMatchClick)
-                2 -> BracketTab(onViewMatchClick = onViewMatchClick)
-                3 -> MetricsTab()
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (tournament != null) {
+                val submitFinalBuild: (UserProfile) -> Unit = { qualifier ->
+                    tournament?.let { currentTournament ->
+                        val playerName = qualifier.bladerName.ifBlank { qualifier.uid }
+                        onSubmitFinalBuild(currentTournament.uid, qualifier.uid, playerName)
+                    }
+                }
+                when (selectedTabIndex) {
+                    0 -> OverviewTab(
+                        tournament = tournament!!,
+                        participants = participants,
+                        finalBuilds = finalBuilds,
+                        isHostOrJudge = isHost || isJudge,
+                        judgesAlsoPlay = judgesAlsoPlay
+                    )
+                    1 -> MatchesTab(
+                        tournament = tournament!!,
+                        matches = matches,
+                        isHost = isHost,
+                        onViewMatchClick = onViewMatchClick,
+                        onGenerateMatches = { advanceToFinals ->
+                            viewModel.generateMatches(
+                                tournament = tournament!!,
+                                advanceToFinals = advanceToFinals
+                            )
+                        },
+                        participants = participants,
+                        finalBuilds = finalBuilds,
+                        onSubmitFinalBuild = submitFinalBuild,
+                        isJudge = isJudge,
+                        judgesAlsoPlay = judgesAlsoPlay
+                    )
+                    2 -> BracketTab(
+                        tournament = tournament!!,
+                        matches = matches,
+                        onViewMatchClick = onViewMatchClick
+                    )
+                    3 -> MetricsTab(matches = matches)
+                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Tournament not found")
+                }
             }
         }
     }
 }
 
 @Composable
-fun PlaceholderTabContent(screenName: String) {
-    // This is a placeholder for screens assigned to other group members.
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Text(text = "$screenName content will be displayed here.")
-        Text(text = "Assigned to another team member.")
-    }
-}
+fun ShareTournamentDialog(
+    tournamentName: String,
+    tournamentCode: String,
+    qrBitmap: Bitmap?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
 
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("Join Tournament", fontWeight = FontWeight.Bold)
+                Text(tournamentName, style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // QR Code Image
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = "Tournament QR Code",
+                        modifier = Modifier.size(200.dp)
+                    )
+                } else {
+                    Box(modifier = Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+                        Text("Generating QR...")
+                    }
+                }
+
+                Text("Scan to join via App", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color.Gray)
+
+                HorizontalDivider()
+
+                Text("OR USE CODE", fontWeight = FontWeight.Bold)
+
+                // Code + Copy Button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = tournamentCode,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 4.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    IconButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Tournament Code", tournamentCode)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Code copied!", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy Code")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
 @Preview(showBackground = true)
 @Composable

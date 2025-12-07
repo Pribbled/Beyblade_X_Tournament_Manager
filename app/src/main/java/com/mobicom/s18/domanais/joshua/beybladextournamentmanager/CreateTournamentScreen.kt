@@ -1,5 +1,6 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -9,33 +10,75 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateTournamentScreen(
     onBackClick: () -> Unit = {},
-    onCreateTournamentClick: () -> Unit = {}
+    onCreateTournamentClick: (String) -> Unit = {}
 ) {
+    // --- State Variables ---
     var tournamentName by remember { mutableStateOf("") }
-    var tournamentFormat by remember { mutableStateOf("") }
-    var scoringSystem by remember { mutableStateOf("") }
-    var tieBreakRules by remember { mutableStateOf("") }
+    var tournamentStartDate by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
-    // Dropdown options and selections
-    val formatOptions = listOf("Single Elimination", "Double Elimination", "Round Robin", "Swiss System")
-    var expandedFormatDropdown by remember { mutableStateOf(false) }
-    var selectedFormatOption by remember { mutableStateOf(formatOptions[0]) }
+    // Structure
+    var stageCount by remember { mutableStateOf(1) } // 1 or 2
 
-    val scoringOptions = listOf("Standard (1-2-3)", "Custom", "Win-Loss Only")
-    var expandedScoringDropdown by remember { mutableStateOf(false) }
+    // Format Options
+    val stageFormatOptions = listOf("Round Robin", "Swiss System", "Single Elimination")
+
+    var selectedStage1Format by remember { mutableStateOf(stageFormatOptions[0]) }
+    var selectedStage2Format by remember { mutableStateOf(stageFormatOptions[2]) }
+
+    var roundsToPlay by remember { mutableStateOf(1) }
+    var topXQualifiers by remember { mutableStateOf(4) }
+
+    // Battle Rules
+    val battleTypeOptions = listOf("3on3 Deck", "1on1 Standard", "5G Battle")
+    var selectedBattleType by remember { mutableStateOf("3on3 Deck") } // Default per requirement
+
+    val scoringOptions = listOf("Standard", "All-One")
     var selectedScoringOption by remember { mutableStateOf(scoringOptions[0]) }
 
-    // Toggle states
+    // Tie Breakers
+    val rankingSystems = listOf("Match Wins", "Points Scored")
+    var selectedRankingSystem by remember { mutableStateOf("Match Wins") }
+
+    val tieBreakerOptions = listOf("Points Scored", "Points Difference", "Wins vs Tied Participants", "Median-Buchholz System", "None")
+    var tieBreaker1 by remember { mutableStateOf("Points Scored") }
+    var tieBreaker2 by remember { mutableStateOf("Points Difference") }
+    var tieBreaker3 by remember { mutableStateOf("Wins vs Tied Participants") }
+
+    // Toggles
     var allowSelfRegistration by remember { mutableStateOf(true) }
     var publicVisibility by remember { mutableStateOf(true) }
+    var judgesAlsoPlay by remember { mutableStateOf(false) }
+
+    // Backend State
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val auth = FirebaseModule.auth
+    val db = FirebaseModule.db
+
+    LaunchedEffect(selectedStage1Format) {
+        if (selectedStage1Format == "Swiss System") {
+            roundsToPlay = 5
+        } else if (selectedStage1Format == "Round Robin") {
+            roundsToPlay = 1
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -43,10 +86,7 @@ fun CreateTournamentScreen(
                 title = { Text("Create Tournament") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -65,181 +105,347 @@ fun CreateTournamentScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Tournament Name
-            OutlinedTextField(
-                value = tournamentName,
-                onValueChange = { tournamentName = it },
-                label = { Text("Tournament Name") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
 
-            // Tournament Format Dropdown
-            Text(
-                text = "Tournament Format",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            ExposedDropdownMenuBox(
-                expanded = expandedFormatDropdown,
-                onExpandedChange = { expandedFormatDropdown = !expandedFormatDropdown }
-            ) {
+            // --- SECTION 1: BASIC INFO ---
+            ConfigSection(title = "Basic Information") {
                 OutlinedTextField(
-                    value = selectedFormatOption,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedFormatDropdown) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                    value = tournamentName,
+                    onValueChange = { tournamentName = it },
+                    label = { Text("Tournament Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
-                ExposedDropdownMenu(
-                    expanded = expandedFormatDropdown,
-                    onDismissRequest = { expandedFormatDropdown = false }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                 ) {
-                    formatOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                selectedFormatOption = option
-                                expandedFormatDropdown = false
-                            }
-                        )
-                    }
+                    Text(tournamentStartDate ?: "Select Start Date")
                 }
             }
 
-            // Scoring System Dropdown
-            Text(
-                text = "Scoring System",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            ExposedDropdownMenuBox(
-                expanded = expandedScoringDropdown,
-                onExpandedChange = { expandedScoringDropdown = !expandedScoringDropdown }
-            ) {
-                OutlinedTextField(
-                    value = selectedScoringOption,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedScoringDropdown) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            ConfigSection(title = "Structure & Format") {
+                Text("Number of Stages", style = MaterialTheme.typography.labelLarge)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = stageCount == 1, onClick = { stageCount = 1 })
+                    Text("1 Stage (Standard)", modifier = Modifier.padding(end = 16.dp))
+
+                    RadioButton(selected = stageCount == 2, onClick = { stageCount = 2 })
+                    Text("2 Stages (Group -> Final)")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val label1 = if (stageCount == 1) "Tournament Format" else "Group Stage Format"
+                DropdownSelector(
+                    label = label1,
+                    options = stageFormatOptions,
+                    selectedOption = selectedStage1Format,
+                    onOptionSelected = { selectedStage1Format = it }
                 )
 
-                ExposedDropdownMenu(
-                    expanded = expandedScoringDropdown,
-                    onDismissRequest = { expandedScoringDropdown = false }
-                ) {
-                    scoringOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                selectedScoringOption = option
-                                expandedScoringDropdown = false
-                            }
-                        )
-                    }
+                // Specific Config for Round Robin / Swiss
+                if (selectedStage1Format == "Round Robin") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Matchups per Pair (Round Robin)", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = roundsToPlay.toFloat(),
+                        onValueChange = { roundsToPlay = it.toInt() },
+                        valueRange = 1f..5f,
+                        steps = 3
+                    )
+                    Text("Players face each other $roundsToPlay time(s)")
+                } else if (selectedStage1Format == "Swiss System") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Number of Swiss Rounds", style = MaterialTheme.typography.labelMedium)
+                    Slider(
+                        value = roundsToPlay.toFloat(),
+                        onValueChange = { roundsToPlay = it.toInt() },
+                        valueRange = 3f..10f,
+                        steps = 6
+                    )
+                    Text("$roundsToPlay Rounds total")
                 }
-            }
 
-            // Tie Break Rules
-            OutlinedTextField(
-                value = tieBreakRules,
-                onValueChange = { tieBreakRules = it },
-                label = { Text("Tie Break Rules") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2,
-                maxLines = 4
-            )
+                // Stage 2 Config
+                if (stageCount == 2) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text("Final Stage Settings", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 
-            // Custom Settings Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Tournament Settings",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                    DropdownSelector(
+                        label = "Final Stage Format",
+                        options = stageFormatOptions,
+                        selectedOption = selectedStage2Format,
+                        onOptionSelected = { selectedStage2Format = it }
                     )
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 16.dp)
-                        ) {
-                            Text(
-                                text = "Allow Self-Registration",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "Participants can register themselves for the tournament",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = allowSelfRegistration,
-                            onCheckedChange = { allowSelfRegistration = it }
+                    // NEW: Qualifiers Selector
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Qualifiers from Group Stage", style = MaterialTheme.typography.labelMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Slider(
+                            value = topXQualifiers.toFloat(),
+                            onValueChange = { topXQualifiers = it.toInt() },
+                            valueRange = 2f..16f,
+                            steps = 13, // (16-2)-1 = 13 steps
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Top $topXQualifiers",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(60.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.End
                         )
                     }
-
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 16.dp)
-                        ) {
-                            Text(
-                                text = "Public Visibility",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "Tournament is visible in public listings",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = publicVisibility,
-                            onCheckedChange = { publicVisibility = it }
-                        )
-                    }
+                    Text("The Top $topXQualifiers players will advance to the Finals.", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color.Gray)
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            ConfigSection(title = "Battle Rules") {
+                DropdownSelector(
+                    label = "Battle Type",
+                    options = battleTypeOptions,
+                    selectedOption = selectedBattleType,
+                    onOptionSelected = { selectedBattleType = it }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                DropdownSelector(
+                    label = "Scoring System",
+                    options = scoringOptions,
+                    selectedOption = selectedScoringOption,
+                    onOptionSelected = { selectedScoringOption = it }
+                )
+            }
+
+            ConfigSection(title = "Ranking & Tie Breakers") {
+                DropdownSelector(
+                    label = "Primary Ranking System",
+                    options = rankingSystems,
+                    selectedOption = selectedRankingSystem,
+                    onOptionSelected = { selectedRankingSystem = it }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Tie Breaker Priority", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+
+                DropdownSelector(label = "1. First Priority", options = tieBreakerOptions, selectedOption = tieBreaker1, onOptionSelected = { tieBreaker1 = it })
+                Spacer(modifier = Modifier.height(4.dp))
+                DropdownSelector(label = "2. Second Priority", options = tieBreakerOptions, selectedOption = tieBreaker2, onOptionSelected = { tieBreaker2 = it })
+                Spacer(modifier = Modifier.height(4.dp))
+                DropdownSelector(label = "3. Third Priority", options = tieBreakerOptions, selectedOption = tieBreaker3, onOptionSelected = { tieBreaker3 = it })
+            }
+
+            ConfigSection(title = "Registration") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Allow Self-Registration")
+                    Switch(checked = allowSelfRegistration, onCheckedChange = { allowSelfRegistration = it })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Public Visibility")
+                    Switch(checked = publicVisibility, onCheckedChange = { publicVisibility = it })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Judges also play")
+                    Switch(checked = judgesAlsoPlay, onCheckedChange = { judgesAlsoPlay = it })
+                }
+            }
+
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = onCreateTournamentClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                onClick = {
+                    scope.launch {
+                        isLoading = true
+                        errorMessage = null
+
+                        if (tournamentName.isBlank()) {
+                            errorMessage = "Tournament name cannot be empty."
+                            isLoading = false
+                            return@launch
+                        }
+                        if(tournamentStartDate.isNullOrBlank()){
+                            errorMessage = "Please select a start date."
+                            isLoading = false
+                            return@launch
+                        }
+
+                        // Scoring Logic
+                        val scoringKey = if (selectedScoringOption == "All-One") "all_one" else "standard"
+                        val scoringValues = if (scoringKey == "all_one") mapOf("extreme" to 1, "burst" to 1, "over" to 1, "spin" to 1) else mapOf("extreme" to 3, "burst" to 2, "over" to 1, "spin" to 1)
+
+                        val tournament = Tournament(
+                            uid = "",
+                            tournamentOwner = auth.currentUser?.uid ?: "",
+                            name = tournamentName,
+                            startDate = tournamentStartDate ?: "",
+
+                            // New Structure Fields
+                            stageCount = stageCount,
+                            stage1Format = selectedStage1Format,
+                            stage2Format = if (stageCount == 2) selectedStage2Format else "",
+
+                            roundsToPlay = roundsToPlay,
+                            topXQualifiers = if (stageCount == 2) topXQualifiers else 4,
+                            currentStage = 1,
+
+                            // Battle Rules
+                            battleType = selectedBattleType,
+                            scoringSystem = scoringKey,
+                            scoringValueExtreme = scoringValues["extreme"] ?: 3,
+                            scoringValueBurst = scoringValues["burst"] ?: 2,
+                            scoringValueOver = scoringValues["over"] ?: 1,
+                            scoringValueSpin = scoringValues["spin"] ?: 1,
+                            lockMatchScoring = scoringKey == "standard",
+
+                            // Tie Breakers
+                            rankingSystem = selectedRankingSystem,
+                            tieBreaker1 = tieBreaker1,
+                            tieBreaker2 = tieBreaker2,
+                            tieBreaker3 = tieBreaker3,
+
+                            allowSelfRegister = allowSelfRegistration,
+                            publicVisibility = publicVisibility,
+                            tournamentJudgesAlsoPlay = judgesAlsoPlay
+                        )
+
+                        try {
+                            val documentRef = db.collection("tournaments").add(tournament).await()
+
+                            // Link to User Profile
+                            db.collection("users")
+                                .document(auth.currentUser?.uid ?: "")
+                                .update("pastTournaments", com.google.firebase.firestore.FieldValue.arrayUnion(documentRef.id))
+                                .await()
+
+                            // Update tournament UID
+                            documentRef.update("uid", documentRef.id).await()
+
+                            onCreateTournamentClick(documentRef.id)
+
+                        } catch (e: Exception) {
+                            errorMessage = "Error creating tournament: ${e.message}"
+                            Log.e("CreateTournament", "Error", e)
+                        } finally {
+                            isLoading = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("Create Tournament")
+                if (isLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Create Tournament")
+                }
+            }
+        }
+    }
+
+    // Date Picker Dialog Logic
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        tournamentStartDate = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US).format(millis)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { Button(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+// --- Helper Composables ---
+
+@Composable
+fun ConfigSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            content()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DropdownSelector(
+    label: String,
+    options: List<String>,
+    selectedOption: String,
+    onOptionSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedOption,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onOptionSelected(option)
+                        expanded = false
+                    }
+                )
             }
         }
     }

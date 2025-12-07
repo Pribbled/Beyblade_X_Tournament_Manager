@@ -1,36 +1,68 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
-
+import androidx.navigation.navArgument
 
 @Composable
 fun AppNavHost(){
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "registerScreenCredentials") {
+    val auth = FirebaseModule.auth
+    val startDestination = if (auth.currentUser != null) {
+        "home"
+    } else {
+        "login"
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
 
         composable("registerScreenCredentials") {
             RegisterScreenCredentials(
                 onRegisterScreenInfo = {
                     navController.navigate("registerScreenInfo")
                 },
-                onLoginClick = {navController.navigate("login")}
+                onLoginClick = {
+                    navController.navigate("login") {
+                        popUpTo("registerScreenCredentials") {
+                            inclusive = true
+                        }
+                    }
+                }
             )
         }
 
         composable("registerScreenInfo") {
             RegisterScreenInfo(
                 onRegistrationComplete = {
-                    //If there is login page go to login page
-                    navController.navigate("home")
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
                 }
             )
         }
 
         composable("login") {
             LoginScreen(
-                onLoginClick = {navController.navigate("home")},
+                onLoginSuccess = {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
+                onNewUser = {
+                    // Google Sign-In was a new user, send to Register Info screen
+                    navController.navigate("registerScreenInfo") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onRegisterClick = {navController.navigate("registerScreenCredentials")}
             )
         }
@@ -41,61 +73,119 @@ fun AppNavHost(){
                 onProfileClick = {
                     navController.navigate("profile")
                 },
-            onTournamentClick = {
-                navController.navigate("tournament")
-            },
-           onJoinTournamentClick = {
-               navController.navigate("joinTournament")
-           },
-            onCreateTournamentClick = {
-                navController.navigate("createTournament")
-           }
+                onTournamentClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId") {
+                        launchSingleTop = true
+                    }
+                },
+                onJoinTournamentClick = {
+                    navController.navigate("joinTournament")
+                },
+                onCreateTournamentClick = {
+                    navController.navigate("createTournament")
+                }
             )
         }
 
         composable("joinTournament") {
             JoinTournamentScreen(
                 onBackClick = { navController.popBackStack()},
-                onJoinAsJudgeClick = {navController.navigate("tournament")},
-                onJoinAsPlayerClick = {navController.navigate("tournament")}
-                //onScanQRCodeClick: () -> Unit = {},
-               // onJoinAsPlayerClick: () -> Unit = {},
-               // onJoinAsJudgeClick: () -> Unit = {}
+                onJoinAsJudgeClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId")
+                },
+                onJoinAsPlayerClick = { tournamentId ->
+                    navController.navigate("tournament/$tournamentId")
+                }
             )
         }
 
         composable ("createTournament") {
             CreateTournamentScreen(
                 onBackClick = { navController.popBackStack()},
-                onCreateTournamentClick = {navController.navigate("tournament")}
-            )
-        }
-
-        composable ("tournament") {
-            TournamentDashboardScreen (
-                onBackClick = { navController.popBackStack() },
-                onViewMatchClick = { match ->
-                    navController.navigate("View Match")
+                onCreateTournamentClick = { tournamentId: String ->
+                    navController.navigate("tournament/$tournamentId") {
+                        popUpTo("home") { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
             )
-
         }
 
-
-        composable("View Match"){
-            MatchDetailsScreen(
-                onBackClick = { navController.popBackStack() },
-                onRecord = {
-                    navController.navigate("Record Match")
+        composable(
+            route = "tournament/{tournamentId}",
+            arguments = listOf(navArgument("tournamentId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            TournamentDashboardScreen(
+                tournamentId = tournamentId,
+                onBackClick = {
+                    navController.popBackStack()
                 },
-                onBuildSubmit = {navController.navigate("BuildSubmit")}
+                onViewMatchClick = { match ->
+                    navController.navigate("match_details/${match.tournamentId}/${match.matchId}")
+                },
+                onSubmitFinalBuild = { tid, pid, name ->
+                    navController.navigate("BuildSubmit/$tid/$pid/${Uri.encode(name)}")
+                }
             )
         }
 
-        composable("BuildSubmit"){
+        composable(
+            route = "match_details/{tournamentId}/{matchId}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("matchId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+            MatchDetailsScreen(
+                tournamentId = tournamentId,
+                matchId = matchId,
+                onBackClick = { navController.popBackStack() },
+                onRecord = {
+                    // Navigate to match recording screen
+                    navController.navigate("match_recording/$tournamentId/$matchId")
+                }
+            )
+        }
+
+        composable(
+            route = "match_recording/{tournamentId}/{matchId}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("matchId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+            MatchRecordingScreen(
+                tournamentId = tournamentId,
+                matchId = matchId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "BuildSubmit/{tournamentId}/{playerId}/{playerName}",
+            arguments = listOf(
+                navArgument("tournamentId") { type = NavType.StringType },
+                navArgument("playerId") { type = NavType.StringType },
+                navArgument("playerName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tournamentId = backStackEntry.arguments?.getString("tournamentId") ?: ""
+            val playerId = backStackEntry.arguments?.getString("playerId") ?: ""
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+
             FinalRoundBuildSubmissionScreen(
-                onBackClick = {navController.popBackStack()},
-                onSubmitClick = {navController.popBackStack()}
+                tournamentId = tournamentId,
+                playerId = playerId,
+                playerName = playerName,
+                onBackClick = { navController.popBackStack() },
+                onSubmitSuccess = { navController.popBackStack() }
             )
         }
 
@@ -119,7 +209,14 @@ fun AppNavHost(){
         composable ("settings"){
             SettingsScreen(
                 onBackClick = {navController.popBackStack()},
-                onLogoutClick = {navController.navigate("login")},
+                onLogoutClick = {
+                    auth.signOut()
+                    navController.navigate("login") {
+                        popUpTo(navController.graph.id) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onAboutClick = {navController.navigate("About")}
             )
         }
@@ -127,12 +224,6 @@ fun AppNavHost(){
         composable ("notifs"){
             NotificationsScreen(
                 onBackClick = {navController.popBackStack()}
-            )
-        }
-
-        composable ("Record Match"){
-            MatchRecordingScreen(
-
             )
         }
 
