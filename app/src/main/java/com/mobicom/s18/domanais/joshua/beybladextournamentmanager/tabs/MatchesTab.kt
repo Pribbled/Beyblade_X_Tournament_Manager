@@ -22,6 +22,7 @@ import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.BeybladeB
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.belongsToPlayer
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 /**
@@ -35,7 +36,7 @@ fun MatchesTab(
     matches: List<Match>,
     isHost: Boolean = false,
     onViewMatchClick: (Match) -> Unit = {},
-    onGenerateMatches: () -> Unit = {},
+    onGenerateMatches: (Boolean) -> Unit = { _ -> },
     currentUserId: String? = FirebaseModule.auth.currentUser?.uid,
     isJudge: Boolean = tournament.tournamentJudges.contains(currentUserId),
     participants: List<UserProfile> = emptyList(),
@@ -61,7 +62,7 @@ fun MatchesTab(
     // Check if all required final builds are submitted for the qualifiers
     val qualifiers = participants.sortedBy { it.rank }.take(tournament.topXQualifiers)
     val allFinalBuildsSubmitted = qualifiers.isNotEmpty() && qualifiers.all { qualifier ->
-        finalBuilds.any { build -> build.playerId == qualifier.uid }
+        finalBuilds.any { build -> build.belongsToPlayer(qualifier.uid) }
     }
 
     LazyColumn(
@@ -78,7 +79,7 @@ fun MatchesTab(
                         subtitle = "Generate Round 1 to begin the tournament.",
                         buttonText = "Generate Round 1",
                         icon = Icons.Default.Casino,
-                        onClick = onGenerateMatches
+                        onClick = { onGenerateMatches(false) }
                     )
                 }
             } else if (currentRoundFinished) {
@@ -102,7 +103,7 @@ fun MatchesTab(
                             subtitle = subtitleText,
                             buttonText = "Start Finals",
                             icon = Icons.Default.EmojiEvents,
-                            onClick = onGenerateMatches,
+                            onClick = { onGenerateMatches(true) },
                             enabled = qualifiers.isNotEmpty() && allFinalBuildsSubmitted
                         )
                     }
@@ -125,7 +126,7 @@ fun MatchesTab(
                             subtitle = "Generate pairings for the next round.",
                             buttonText = "Generate Round ${calculatedCurrentRound + 1}",
                             icon = Icons.Default.NextPlan,
-                            onClick = onGenerateMatches
+                            onClick = { onGenerateMatches(false) }
                         )
                     }
                 }
@@ -337,7 +338,7 @@ fun QualifiedFinalistList(
         )
 
         qualifiers.forEach { qualifier ->
-            val submitted = finalBuilds.any { it.playerId == qualifier.uid }
+            val submitted = finalBuilds.any { it.belongsToPlayer(qualifier.uid) }
             Card {
                 Row(
                     modifier = Modifier

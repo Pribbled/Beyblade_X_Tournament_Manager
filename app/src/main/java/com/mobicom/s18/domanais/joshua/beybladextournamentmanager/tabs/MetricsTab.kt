@@ -66,9 +66,7 @@ fun MetricsTab(
             )
 
             StatisticsCardRow(
-                totalMatches = totalMatches.toString(),
-                totalBursts = totalBursts.toString(),
-                avgTime = avgTimeStr
+                totalMatches = totalMatches.toString()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -80,7 +78,6 @@ fun MetricsTab(
             )
             
             if (totalMatches > 0) {
-                BarChartCard(countBurst, countExtreme, countSpin, countOver)
                 PieChartCard(completedMatches)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -106,16 +103,12 @@ fun MetricsTab(
 @Composable
 private fun StatisticsCardRow(
     totalMatches: String,
-    totalBursts: String,
-    avgTime: String
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         StatisticCard("Total Matches", totalMatches, Modifier.weight(1f))
-        StatisticCard("Burst Finishes", totalBursts, Modifier.weight(1f))
-        StatisticCard("Avg. Match Time", avgTime, Modifier.weight(1f))
     }
 }
 

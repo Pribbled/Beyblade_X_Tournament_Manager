@@ -1060,6 +1060,23 @@ class MatchRepository(
         }
     }
 
+    suspend fun finalBuildsComplete(
+        tournamentId: String,
+        qualifierIds: List<String>
+    ): Boolean {
+        if (qualifierIds.isEmpty()) return false
+
+        val builds = db.collection(TOURNAMENTS_COLLECTION)
+            .document(tournamentId)
+            .collection(FINAL_BUILDS_COLLECTION)
+            .whereIn("playerId", qualifierIds)
+            .get()
+            .await()
+            .toObjects(BeybladeBuild::class.java)
+
+        return qualifierIds.all { id -> builds.any { it.belongsToPlayer(id) } }
+    }
+
     suspend fun generateMatchesForTournament(
         tournament: Tournament,
         participants: List<UserProfile>
@@ -1082,7 +1099,7 @@ class MatchRepository(
                     .toObjects(BeybladeBuild::class.java)
 
                 val missingBuilds = participants.sortedBy { it.rank }.take(tournament.topXQualifiers).filterNot { qualifier ->
-                    finalBuilds.any { build -> build.playerId == qualifier.uid }
+                    finalBuilds.any { build -> build.belongsToPlayer(qualifier.uid) }
                 }
                 if (missingBuilds.isNotEmpty()) {
                     return Result.failure(Exception("Final builds pending for ${missingBuilds.size} qualifier(s)."))

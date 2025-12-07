@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.BeybladeBuild
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.belongsToPlayer
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.ui.theme.BeybladeXTournamentManagerTheme
 
 @Composable
@@ -383,7 +384,7 @@ fun QualifiedFinalistList(
     if (qualifiers.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         qualifiers.forEach { player ->
-            val hasSubmitted = finalBuilds.any { it.playerId == player.uid }
+            val hasSubmitted = finalBuilds.any { it.belongsToPlayer(player.uid) }
             QualifiedPlayerRow(
                 player = player,
                 hasSubmitted = hasSubmitted,

@@ -138,4 +138,16 @@ class TournamentDashboardViewModel(
             _isLoading.value = false
         }
     }
+
+    /**
+     * Check if all finalists have submitted their builds.
+     * This is a helper function to determine if the tournament can advance to the finals.
+     */
+    suspend fun canAdvanceToFinals(tournament: Tournament, qualifiers: List<UserProfile>): Boolean {
+        if (qualifiers.isEmpty()) return false
+        return matchRepository.finalBuildsComplete(
+            tournamentId = tournament.uid,
+            qualifierIds = qualifiers.map { it.uid }
+        )
+    }
 }

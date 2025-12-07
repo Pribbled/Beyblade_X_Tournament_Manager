@@ -85,3 +85,9 @@ data class BeybladeBuild(
     val submittedAt: Timestamp = Timestamp.now(),
     val updatedAt: Timestamp = Timestamp.now()
 )
+
+fun BeybladeBuild.belongsToPlayer(playerId: String): Boolean {
+    if (playerId.isBlank()) return false
+    if (this.playerId == playerId) return true
+    return this.playerId.startsWith("${playerId}_")
+}

@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Match
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.Tournament
+import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.data.UserProfile
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.BracketTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MatchesTab
 import com.mobicom.s18.domanais.joshua.beybladextournamentmanager.tabs.MetricsTab
@@ -42,6 +43,7 @@ fun TournamentDashboardScreen(
     tournamentId: String = "preview1",
     onBackClick: () -> Unit = {} ,
     onViewMatchClick: (Match) -> Unit = {},
+    onSubmitFinalBuild: (String, String, String) -> Unit = { _, _, _ -> },
     viewModel: TournamentDashboardViewModel = viewModel()
 ) {
     val db = FirebaseFirestore.getInstance()
@@ -149,6 +151,12 @@ fun TournamentDashboardScreen(
                     CircularProgressIndicator()
                 }
             } else if (tournament != null) {
+                val submitFinalBuild: (UserProfile) -> Unit = { qualifier ->
+                    tournament?.let { currentTournament ->
+                        val playerName = qualifier.bladerName.ifBlank { qualifier.uid }
+                        onSubmitFinalBuild(currentTournament.uid, qualifier.uid, playerName)
+                    }
+                }
                 when (selectedTabIndex) {
                     0 -> OverviewTab(
                         tournament = tournament!!,
@@ -162,9 +170,15 @@ fun TournamentDashboardScreen(
                         matches = matches,
                         isHost = isHost,
                         onViewMatchClick = onViewMatchClick,
-                        onGenerateMatches = { viewModel.generateMatches(tournament!!) },
+                        onGenerateMatches = { advanceToFinals ->
+                            viewModel.generateMatches(
+                                tournament = tournament!!,
+                                advanceToFinals = advanceToFinals
+                            )
+                        },
                         participants = participants,
                         finalBuilds = finalBuilds,
+                        onSubmitFinalBuild = submitFinalBuild,
                         isJudge = isJudge,
                         judgesAlsoPlay = judgesAlsoPlay
                     )

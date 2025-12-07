@@ -1,5 +1,6 @@
 package com.mobicom.s18.domanais.joshua.beybladextournamentmanager
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -121,8 +122,10 @@ fun AppNavHost(){
                     navController.popBackStack()
                 },
                 onViewMatchClick = { match ->
-                    // Navigate to match details with proper parameters
                     navController.navigate("match_details/${match.tournamentId}/${match.matchId}")
+                },
+                onSubmitFinalBuild = { tid, pid, name ->
+                    navController.navigate("BuildSubmit/$tid/$pid/${Uri.encode(name)}")
                 }
             )
         }
